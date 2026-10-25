@@ -315,6 +315,205 @@ try {
   assert(!crud.allDayAfterRange, 'all-day DTEND is exclusive');
   assert(crud.hiddenExcluded, 'hidden calendar excluded by default');
   assert(crud.hiddenExplicit, 'hidden calendar included when requested');
+
+  // --- M3 editor ---
+
+  const todayKey = await evaluate(
+    "(async () => (await import('/src/core/datetime.js')).dt.todayString())()",
+    true,
+  );
+
+  await evaluate(
+    `(async () => {
+      const { store } = await import('/src/core/store.js');
+      const { dt } = await import('/src/core/datetime.js');
+      const calendar = store.getCalendars()[0];
+      const day = dt.fromDateString(${JSON.stringify(todayKey)});
+      for (const hour of [11, 12, 13, 14]) {
+        const start = day.with({ hour });
+        await store.createEvent({
+          summary: 'More ' + hour,
+          calendar_id: calendar.id,
+          dtstart_utc: dt.toUtc(start),
+          dtstart_tzid: start.timeZoneId,
+          dtend_utc: dt.toUtc(start.add({ minutes: 30 })),
+          dtend_tzid: start.timeZoneId,
+        });
+      }
+      return true;
+    })()`,
+    true,
+  );
+
+  assert(
+    await waitFor(
+      `[...document.querySelectorAll('.month-cell')].some((cell) => cell.classList.contains('is-today') && cell.querySelector('.month-more'))`,
+    ),
+    'overflow shows +N more',
+    await evaluate(
+      "[...document.querySelectorAll('.month-cell.is-today .month-more')].map((n) => n.textContent)[0]",
+    ),
+  );
+
+  await evaluate(
+    "[...document.querySelectorAll('.month-cell.is-today .month-more')][0].click(); true",
+  );
+  assert(
+    await waitFor("document.querySelectorAll('.event-day-row').length === 4"),
+    'more opens day list',
+    await evaluate("document.querySelectorAll('.event-day-row').length"),
+  );
+  await evaluate("document.querySelector('.event-panel [data-action=\"close\"]').click(); true");
+
+  await evaluate(
+    `(async () => {
+      const { store } = await import('/src/core/store.js');
+      for (const event of [...store.events]) {
+        if (event.summary?.startsWith('More ')) await store.deleteEvent(event.id);
+      }
+      return true;
+    })()`,
+    true,
+  );
+
+  await evaluate(
+    `(() => {
+      const cells = [...document.querySelectorAll('.month-cell:not(.is-other-month)')];
+      cells.find((cell) => !cell.classList.contains('is-today')).click();
+      return true;
+    })()`,
+  );
+  assert(
+    await waitFor("Boolean(document.querySelector('.event-panel[open] .event-form'))"),
+    'tap empty day opens editor',
+  );
+
+  await evaluate(
+    "document.querySelector('#event-title').value = 'Smoke event'; document.querySelector('.event-save').click(); true",
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'Smoke event')",
+    ),
+    'save creates chip',
+  );
+
+  const created = await evaluate(
+    `new Promise((resolve, reject) => {
+      const request = indexedDB.open('daybook');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const all = request.result.transaction('events').objectStore('events').getAll();
+        all.onsuccess = () => resolve(all.result.find((event) => event.summary === 'Smoke event'));
+        all.onerror = () => reject(all.error);
+      };
+    })`,
+    true,
+  );
+  assert(created?.all_day === false, 'created event is timed');
+  assert(typeof created?.dtstart_utc === 'number', 'created event has start instant', created?.dtstart_utc);
+  assert(
+    created?.dtstart_utc < created?.dtend_utc,
+    'created event end after start',
+  );
+
+  await evaluate(
+    "[...document.querySelectorAll('.event-chip')].find((chip) => chip.textContent.includes('Smoke event')).click(); true",
+  );
+  assert(
+    await waitFor("Boolean(document.querySelector('.event-detail-when')?.textContent)"),
+    'chip opens detail',
+    await evaluate("document.querySelector('.event-detail-when')?.textContent"),
+  );
+
+  await evaluate("document.querySelector('.event-panel [data-action=\"edit\"]').click(); true");
+  assert(
+    (await evaluate("document.querySelector('#event-title')?.value")) === 'Smoke event',
+    'edit prefills title',
+  );
+
+  await evaluate(
+    "document.querySelector('#event-title').value = 'Smoke edited'; document.querySelector('.event-save').click(); true",
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'Smoke edited')",
+    ),
+    'edit updates chip',
+  );
+
+  await send('Page.reload');
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'Smoke edited')",
+    ),
+    'edited event survives reload',
+  );
+
+  await evaluate('window.confirm = () => true; true');
+  await evaluate(
+    "[...document.querySelectorAll('.event-chip')].find((chip) => chip.textContent.includes('Smoke edited')).click(); true",
+  );
+  await evaluate("document.querySelector('.event-panel [data-action=\"delete\"]').click(); true");
+  assert(
+    await waitFor(
+      "![...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'Smoke edited')",
+    ),
+    'delete removes chip',
+  );
+
+  await evaluate(
+    `(() => {
+      const cells = [...document.querySelectorAll('.month-cell:not(.is-other-month)')];
+      cells.find((cell) => !cell.classList.contains('is-today')).click();
+      return true;
+    })()`,
+  );
+  await evaluate(
+    `(() => {
+      document.querySelector('#event-title').value = 'All day smoke';
+      document.querySelector('#event-all-day').click();
+      const start = document.querySelector('#event-start-date').value;
+      document.querySelector('#event-end-date').value = start;
+      document.querySelector('.event-save').click();
+      return true;
+    })()`,
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'All day smoke')",
+    ),
+    'all-day event renders chip',
+  );
+  assert(
+    await evaluate(
+      "!([...document.querySelectorAll('.event-chip')].find((chip) => chip.textContent.includes('All day smoke')).querySelector('.event-chip-time'))",
+    ),
+    'all-day chip has no time',
+  );
+
+  const allDayEvent = await evaluate(
+    `new Promise((resolve, reject) => {
+      const request = indexedDB.open('daybook');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const all = request.result.transaction('events').objectStore('events').getAll();
+        all.onsuccess = () => resolve(all.result.find((event) => event.summary === 'All day smoke'));
+        all.onerror = () => reject(all.error);
+      };
+    })`,
+    true,
+  );
+  assert(allDayEvent?.all_day === true, 'all-day flag stored');
+  assert(
+    allDayEvent?.dtstart_utc === null && allDayEvent?.dtend_utc === null,
+    'all-day event has no instants',
+  );
+  assert(
+    allDayEvent?.all_day_end > allDayEvent?.all_day_start,
+    'all-day end is exclusive next day',
+    `${allDayEvent?.all_day_start} -> ${allDayEvent?.all_day_end}`,
+  );
 } finally {
   socket.close();
   chrome.kill('SIGKILL');

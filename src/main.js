@@ -6,6 +6,7 @@ import './styles/themes/google.css';
 import './styles/base.css';
 import './styles/app.css';
 import './styles/month.css';
+import './styles/editor.css';
 
 import { bus } from './core/bus.js';
 import { dt } from './core/datetime.js';

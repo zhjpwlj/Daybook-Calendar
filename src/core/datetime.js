@@ -74,6 +74,18 @@ export const dt = {
     return getFormatter(zoned, options).format(zoned.epochMilliseconds);
   },
 
+  fromDateTimeStrings(dateString, timeString, tzid = getSystemTimezone()) {
+    return Temporal.PlainDateTime.from(`${dateString}T${timeString}`).toZonedDateTime(tzid);
+  },
+
+  fromDateString(dateString, tzid = getSystemTimezone()) {
+    return Temporal.PlainDate.from(dateString).toZonedDateTime(tzid);
+  },
+
+  addDaysToDateString(dateString, days) {
+    return Temporal.PlainDate.from(dateString).add({ days }).toString();
+  },
+
   isValidTimezone(tzid) {
     try {
       Temporal.Now.zonedDateTimeISO(tzid);

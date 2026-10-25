@@ -69,6 +69,15 @@ Appendix A/B, M2. V-Store-1 needs 18,250 events rendered in Month, but M2 was sc
 - **`core/datetime.js` formatter cache.** `Intl.DateTimeFormat` allocation per cell pushed render past 200 ms; one formatter per timezone/options key fixed it.
 - **Headless boot is 460 ms** with 18,250 events; month render is 133 ms. On iPad: render **78 ms**, boot **272 ms**. Render gate passes; boot stays ungated.
 
+## M3 build deviations
+
+- **Editor scope assumed.** `spec.md` was absent and the user said continue; fields are title, all-day, start/end, calendar, location, notes. Recurrence and reminders stay out.
+- **One `<dialog>` for editor, detail, and day list.** Native modal gives Escape, focus containment, and a backdrop without custom code.
+- **All-day end is inclusive in the UI, exclusive in storage**, matching iCal `DTEND` and R1.
+- **Delete uses `window.confirm`.** In-app confirmation is deferred until the design system has one.
+- **`--danger` token added to all four themes.**
+- **Hardware checks pending** for tap targets, sheet height, native date/time pickers, and rotation.
+
 ## M1 additions (user request)
 
 - **System theme default.** With no stored choice, the theme follows `prefers-color-scheme` and updates live when the system flips. Picking a theme in the select stores it and stops system following. Apple/Google skins remain manual.

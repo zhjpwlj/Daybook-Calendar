@@ -2,6 +2,7 @@ import { bus } from '../../core/bus.js';
 import { dt } from '../../core/datetime.js';
 import { log as debugLog } from '../../core/debug.js';
 import { store } from '../../core/store.js';
+import { openDay, openDetail, openEditor } from '../event-panel.js';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEK_STARTS_ON = 0;
@@ -84,6 +85,7 @@ export function createMonthView(container) {
       const key = day.toPlainDate().toString();
       const cell = el('div', 'month-cell');
       cell.setAttribute('role', 'gridcell');
+      cell.tabIndex = 0;
       cell.setAttribute(
         'aria-label',
         dt.format(day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
@@ -103,7 +105,9 @@ export function createMonthView(container) {
       if (dayEvents.length > 0) {
         const chips = el('div', 'month-chips');
         for (const event of dayEvents.slice(0, MAX_CHIPS)) {
-          const chip = el('span', 'event-chip');
+          const chip = el('button', 'event-chip');
+          chip.type = 'button';
+          chip.dataset.eventId = event.id;
           const calendar = calendarById.get(event.calendar_id);
           chip.style.setProperty('--chip-color', calendar?.color ?? 'var(--event-chip-stripe)');
           chip.title = event.summary || 'Untitled event';
@@ -121,14 +125,34 @@ export function createMonthView(container) {
             );
           }
           chip.append(el('span', 'event-chip-title', event.summary || 'Untitled'));
+          chip.addEventListener('click', (clickEvent) => {
+            clickEvent.stopPropagation();
+            openDetail(event.id);
+          });
           chips.append(chip);
         }
 
         if (dayEvents.length > MAX_CHIPS) {
-          chips.append(el('span', 'month-more', `+${dayEvents.length - MAX_CHIPS} more`));
+          const more = el('button', 'month-more', `+${dayEvents.length - MAX_CHIPS} more`);
+          more.type = 'button';
+          more.addEventListener('click', (clickEvent) => {
+            clickEvent.stopPropagation();
+            openDay(key);
+          });
+          chips.append(more);
         }
         cell.append(chips);
       }
+
+      cell.addEventListener('click', (clickEvent) => {
+        if (clickEvent.target.closest('.event-chip, .month-more')) return;
+        openEditor({ dateKey: key });
+      });
+      cell.addEventListener('keydown', (keyEvent) => {
+        if (keyEvent.key !== 'Enter' && keyEvent.key !== ' ') return;
+        keyEvent.preventDefault();
+        openEditor({ dateKey: key });
+      });
 
       grid.append(cell);
     }
