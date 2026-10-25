@@ -1,0 +1,25 @@
+:root {
+  /* JS overwrites this with window.innerHeight. 100lvh is the no-JS fallback. */
+  --app-height: 100vh;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-control: 8px;
+  --radius-modal: 14px;
+  --header-pad-x: 16px;
+  --header-pad-y: 12px;
+  --grid-cell-min-height: 84px;
+  --transition-theme: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+@supports (height: 100lvh) {
+  :root {
+    --app-height: 100lvh;
+  }
+}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Daybook</title>
+    <meta name="description" content="A calendar that lives on your device." />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Daybook" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+    <!-- iOS: data-theme must be set before first paint, or the wrong theme flashes. -->
+    <script src="/theme-init.js"></script>
+  </head>
+  <body>
+    <div id="app" class="app">
+      <header class="app-header">
+        <h1 class="app-title">Daybook</h1>
+        <label class="theme-control">
+          <span class="theme-control-label">Theme</span>
+          <select id="theme-select">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="apple">Apple Calendar</option>
+            <option value="google">Google Calendar</option>
+          </select>
+        </label>
+      </header>
+
+      <main class="app-main">
+        <p class="shell-note">Calendar shell. No events yet.</p>
+        <div class="weekday-row" aria-hidden="true">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="shell-grid" aria-hidden="true">
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+        </div>
+      </main>
+
+      <div id="update-banner" class="update-banner" hidden>
+        <span>New version available.</span>
+        <button id="update-reload" type="button">Reload</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
