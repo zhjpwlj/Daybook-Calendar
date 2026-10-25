@@ -67,7 +67,7 @@ Appendix A/B, M2. V-Store-1 needs 18,250 events rendered in Month, but M2 was sc
 - **`week_starts_on` is hardcoded to Sunday.** Settings wiring is M14.
 - **Calendar CRUD is store-level only.** No management UI yet.
 - **`core/datetime.js` formatter cache.** `Intl.DateTimeFormat` allocation per cell pushed render past 200 ms; one formatter per timezone/options key fixed it.
-- **Headless boot is 460 ms** with 18,250 events; month render is 133 ms. Only render is gated; hardware must confirm.
+- **Headless boot is 460 ms** with 18,250 events; month render is 133 ms. On iPad: render **78 ms**, boot **272 ms**. Render gate passes; boot stays ungated.
 
 ## M1 additions (user request)
 

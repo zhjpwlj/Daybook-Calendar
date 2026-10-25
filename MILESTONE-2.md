@@ -2,7 +2,7 @@
 
 **Goal:** IndexedDB v1 schema, singleton store with event/calendar CRUD, real Month grid with read-only chips, and a 10-year seed fixture for V-Store-1.
 
-**Status:** automated checks pass in headless Chromium. **V-Store-1 pending on target hardware.**
+**Status:** **Complete.** Automated checks pass in headless Chromium; V-Store-1 passed on iPad.
 
 ## Scope
 
@@ -47,7 +47,7 @@ Headless Chromium 1248, 430×732, dark system scheme, production build, fresh pr
 
 Run: `npm run build`, `npm run preview -- --port 4173`, `npm run dev -- --port 5173`, then `npm run smoke`. Screenshot lands in `/tmp/opencode/daybook-m2.png`.
 
-## V-Store-1 (blocking, hardware)
+## V-Store-1 (blocking, hardware) — PASS
 
 Target: iPad 10th/11th gen, installed PWA, tethered Safari Web Inspector.
 
@@ -59,6 +59,11 @@ Target: iPad 10th/11th gen, installed PWA, tethered Safari Web Inspector.
 6. Re-seed. Count must stay 18,250.
 7. Clear events. Month empties. Re-seed for further milestones.
 
+| Measure | Result | Gate |
+|---|---|---|
+| `month:render`, 18,250 events | **78 ms** | <200 ms, pass |
+| `boot:ready` after relaunch | **272 ms** | none, recorded |
+
 ## Deviations
 
 - Month chips are read-only; tap/create arrives M3.
@@ -66,7 +71,7 @@ Target: iPad 10th/11th gen, installed PWA, tethered Safari Web Inspector.
 - `week_starts_on` is hardcoded to Sunday; settings wiring arrives M14.
 - Calendar CRUD exists at store level only; no settings UI yet.
 - Seed/Clear debug actions ship in this build. Remove before v1.0.
-- Headless render passes; boot latency includes reading 18,250 records and does not prove iPad performance.
+- Headless render 133 ms, boot 460 ms. iPad: render **78 ms**, boot **272 ms**. Render gate passes; boot stays ungated.
 
 ## Next
 
