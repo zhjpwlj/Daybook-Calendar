@@ -2,7 +2,7 @@
 
 **Goal:** Installable PWA shell with a working service worker, CSP headers, safe-area viewport, and four switchable themes.
 
-**Status:** automated checks pass. V-Viewport-1 pending on hardware.
+**Status:** M1 complete. V-Viewport-1 passed on target hardware (user-reported, 2026-10-25). Automated checks pass.
 
 ## Scope
 
