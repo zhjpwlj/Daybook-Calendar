@@ -3,8 +3,20 @@ import { bus } from '../core/bus.js';
 const STORAGE_KEY = 'daybook.theme';
 export const THEMES = ['light', 'dark', 'apple', 'google'];
 
+export function systemTheme() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+export function hasStoredTheme() {
+  try {
+    return THEMES.includes(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
 export function applyTheme(name, { persist = true } = {}) {
-  const theme = THEMES.includes(name) ? name : 'light';
+  const theme = THEMES.includes(name) ? name : systemTheme();
   document.documentElement.dataset.theme = theme;
 
   const meta = document.querySelector('meta[name="theme-color"]');
@@ -31,7 +43,7 @@ export function currentTheme() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (THEMES.includes(saved)) return saved;
   } catch {
-    // Fall through to the document value.
+    // Fall back to the system theme.
   }
-  return document.documentElement.dataset.theme || 'light';
+  return systemTheme();
 }

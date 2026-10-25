@@ -19,7 +19,7 @@
   <body>
     <div id="app" class="app">
       <header class="app-header">
-        <h1 class="app-title">Daybook</h1>
+        <h1 id="app-title" class="app-title">Daybook</h1>
         <label class="theme-control">
           <span class="theme-control-label">Theme</span>
           <select id="theme-select">
@@ -50,6 +50,8 @@
         <span>New version available.</span>
         <button id="update-reload" type="button">Reload</button>
       </div>
+
+      <span id="app-version" class="app-version"></span>
     </div>
 
     <script type="module" src="/src/main.js"></script>

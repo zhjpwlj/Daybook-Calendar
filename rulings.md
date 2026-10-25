@@ -56,6 +56,12 @@ Part 4, Part 6. For scalar settings, localStorage is authoritative. Write localS
 
 Part 14, M10. Handoff into the installed PWA is confirmed by the user: M10 stays unconditional. Callback page stores `{access_token, expires_at}` in sessionStorage and calls `location.replace('/?oauth=<provider>')`; drop the `postMessage` to a parent, since no opener is guaranteed. Boot reads and clears the token. No token on boot means `oauth-failed` ("Import cancelled") and no state change. V-CSP-1 remains a blocking verification but no longer gates whether M10 exists.
 
+## M1 additions (user request)
+
+- **System theme default.** With no stored choice, the theme follows `prefers-color-scheme` and updates live when the system flips. Picking a theme in the select stores it and stops system following. Apple/Google skins remain manual.
+- **Debug log overlay.** Long-press the title for 1 second to toggle. Captures `console.log/info/warn/error`, `window.onerror`, and `unhandledrejection`, plus boot and service-worker events. 100-entry ring buffer, in memory only. Escape closes.
+- **Version label.** Bottom-right, from `package.json` via Vite `define`. Not interactive.
+
 ## M1 build deviations
 
 - **vite-plugin-pwa 2.0.0 is a build-only dependency.** It bundles `src/sw.js` (ESM imports of Workbox) and injects the precache manifest. Standalone `workbox-config.js` would require an extra bundler step. There is no unused `workbox-config.js`; the config lives in `vite.config.js`.

@@ -6,7 +6,16 @@ import './styles/themes/google.css';
 import './styles/base.css';
 import './styles/app.css';
 
-import { applyTheme, currentTheme } from './modules/theme.js';
+import { bus } from './core/bus.js';
+import { installDebug, log as debugLog } from './core/debug.js';
+import {
+  applyTheme,
+  currentTheme,
+  hasStoredTheme,
+  systemTheme,
+} from './modules/theme.js';
+
+installDebug();
 
 const root = document.documentElement;
 
@@ -26,29 +35,61 @@ const themeSelect = document.getElementById('theme-select');
 themeSelect.value = applyTheme(currentTheme(), { persist: false });
 themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
 
+const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+colorScheme.addEventListener('change', () => {
+  if (hasStoredTheme()) return;
+  themeSelect.value = applyTheme(systemTheme(), { persist: false });
+});
+
+bus.on('theme-changed', ({ detail }) => {
+  debugLog('theme', detail.theme);
+});
+
+document.getElementById('app-version').textContent = `v${__APP_VERSION__}`;
+
+debugLog('boot', {
+  version: __APP_VERSION__,
+  theme: currentTheme(),
+  standalone:
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true,
+  serviceWorker: 'serviceWorker' in navigator,
+  innerHeight: window.innerHeight,
+  appHeight: root.style.getPropertyValue('--app-height'),
+  dpr: window.devicePixelRatio,
+});
+
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   const hadController = Boolean(navigator.serviceWorker.controller);
   let reloading = false;
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    debugLog('sw', 'controller changed');
     if (!hadController || reloading) return;
     reloading = true;
     location.reload();
   });
 
   window.addEventListener('load', async () => {
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    try {
+      debugLog('sw', 'registering');
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      debugLog('sw', { registered: registration.scope });
 
-    registration.addEventListener('updatefound', () => {
-      const worker = registration.installing;
-      if (!worker) return;
+      registration.addEventListener('updatefound', () => {
+        debugLog('sw', 'update found');
+        const worker = registration.installing;
+        if (!worker) return;
 
-      worker.addEventListener('statechange', () => {
-        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-          showUpdateBanner(worker);
-        }
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(worker);
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('Service worker registration failed', error);
+    }
   });
 }
 
@@ -62,6 +103,7 @@ function showUpdateBanner(worker) {
     'click',
     () => {
       reload.disabled = true;
+      debugLog('sw', 'skip waiting');
       worker.postMessage({ type: 'SKIP_WAITING' });
     },
     { once: true },
