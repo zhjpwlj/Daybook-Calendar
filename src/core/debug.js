@@ -2,7 +2,23 @@ const MAX_ENTRIES = 100;
 const entries = [];
 let panel;
 let list;
+let actions;
 let installed = false;
+
+export function addDebugAction(label, handler) {
+  if (!actions) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', async () => {
+    try {
+      await handler();
+    } catch (error) {
+      console.error(`Debug action failed: ${label}`, error);
+    }
+  });
+  actions.append(button);
+}
 
 export function log(label, detail) {
   push('log', [label, detail]);
@@ -78,7 +94,10 @@ function buildPanel() {
   list = document.createElement('ol');
   list.className = 'debug-list';
 
-  panel.append(head, list);
+  actions = document.createElement('div');
+  actions.className = 'debug-actions';
+
+  panel.append(head, list, actions);
   document.body.append(panel);
 
   document.addEventListener('keydown', (event) => {

@@ -3,7 +3,6 @@
 Amendments to `spec.md` v1.0. Each entry names the spec part it changes and the reason. Spec v1.0.1 is v1.0 with R1–R13 applied. The on-disk `spec.md` was not present when M1 was built; these entries are the authoritative delta.
 
 ## Spec corrections
-
 ### R1 — All-day DTEND on or before DTSTART
 
 Part 11. If an imported all-day event has `DTEND;VALUE=DATE` equal to or before `DTSTART`, store one day: `all_day_start = DTSTART`, `all_day_end = DTSTART + 1 day`, and warn `Non-RFC DTEND on all-day event; treated as one day`. Applies to date-valued DTEND only. Replaces the self-correcting paragraph in Part 11.
@@ -55,6 +54,20 @@ Part 4, Part 6. For scalar settings, localStorage is authoritative. Write localS
 ### R13 — OAuth handoff
 
 Part 14, M10. Handoff into the installed PWA is confirmed by the user: M10 stays unconditional. Callback page stores `{access_token, expires_at}` in sessionStorage and calls `location.replace('/?oauth=<provider>')`; drop the `postMessage` to a parent, since no opener is guaranteed. Boot reads and clears the token. No token on boot means `oauth-failed` ("Import cancelled") and no state change. V-CSP-1 remains a blocking verification but no longer gates whether M10 exists.
+
+### R14 — V-Store-1 runs at M2
+
+Appendix A/B, M2. V-Store-1 needs 18,250 events rendered in Month, but M2 was scoped as an empty Month view and import arrives M7. M2 therefore includes read-only Month chips and a debug-only seed fixture (18,250 deterministic events, idempotent). The gate stays at M2. Multi-day chip spanning remains M6.
+
+## M2 build deviations
+
+- **Seed/Clear live in the debug panel**, behind long-press. Temporary test tooling; remove before v1.0.
+- **Month chips are read-only.** Tap-to-create and the editor are M3.
+- **Multi-day all-day events render only on the start day.** Spanning cells are M6.
+- **`week_starts_on` is hardcoded to Sunday.** Settings wiring is M14.
+- **Calendar CRUD is store-level only.** No management UI yet.
+- **`core/datetime.js` formatter cache.** `Intl.DateTimeFormat` allocation per cell pushed render past 200 ms; one formatter per timezone/options key fixed it.
+- **Headless boot is 460 ms** with 18,250 events; month render is 133 ms. Only render is gated; hardware must confirm.
 
 ## M1 additions (user request)
 
