@@ -45,7 +45,7 @@ Headless Chromium 1248, 430×732, dark system scheme, production build, fresh pr
 | Hidden calendar default query | excluded |
 | Hidden calendar explicit ids | included |
 
-Run: `npm run build`, then `node /tmp/opencode/daybook-cdp-test.mjs` (harness not committed).
+Run: `npm run build`, `npm run preview -- --port 4173`, `npm run dev -- --port 5173`, then `npm run smoke`. Screenshot lands in `/tmp/opencode/daybook-m2.png`.
 
 ## V-Store-1 (blocking, hardware)
 

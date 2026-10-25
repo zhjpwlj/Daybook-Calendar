@@ -10,7 +10,8 @@
     "dev": "vite",
     "lint:themes": "node scripts/lint-themes.mjs",
     "build": "npm run lint:themes && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke": "node scripts/browser-smoke.mjs"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
