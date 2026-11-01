@@ -78,6 +78,18 @@ Appendix A/B, M2. V-Store-1 needs 18,250 events rendered in Month, but M2 was sc
 - **`--danger` token added to all four themes.**
 - **Hardware checks pending** for tap targets, sheet height, native date/time pickers, and rotation.
 
+### R14 — JSDoc types checked by tsc (B10)
+
+- **Part amended:** brief Stack/Language; spec Part 6; every milestone review.
+- **Triggered during:** pre-M2.
+- **Priority:** Important.
+- **What changed:** Source stays `.js`. JSDoc on exported signatures and shared shapes. `tsc --checkJs`, no emit, via `npm run check:types`. Typedefs in `src/core/types.d.ts`: `Event` (all-day/timed discriminated union), `EventDraft` (write-time input, discriminator required), `Calendar`, `Reminder`, `Settings`, `Occurrence`, `Platform`.
+- **Why:** Part 4 invariants are silent corruption if violated: all-day vs timed null pairs, paired TZID/UTC, exclusive all-day DTEND. Strict null checks catch them at the write boundary.
+- **Adaptations from the B10 pack:** `tsconfig.json` at repo root; no `scaffolding/`. TypeScript 5.9.3 under `^5.6.3`. `types: []` kept; `vite/client` referenced from `src/vite-env.d.ts`, which also declares `__APP_VERSION__` and iOS `navigator.standalone`. DOM + WebWorker libs share one config, so `sw.js` casts `self` to `ServiceWorkerGlobalScope`.
+- **M1 files annotated.** Pack's R-1 annotate-on-touch unused: zero errors on M1–M3 code.
+- **Downstream:** every milestone review includes `npm run check:types`. M15/M19 absent from M1–M14 plan; V-Types-1 attaches to the final milestone.
+- **Resolved:** yes.
+
 ## M1 additions (user request)
 
 - **System theme default.** With no stored choice, the theme follows `prefers-color-scheme` and updates live when the system flips. Picking a theme in the select stores it and stops system following. Apple/Google skins remain manual.

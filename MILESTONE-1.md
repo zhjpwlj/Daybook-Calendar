@@ -43,6 +43,7 @@ src/styles/themes/{light,dark,apple,google}.css
 |---|---|---|
 | Theme contract | `npm run lint:themes` | `4 themes, 26 tokens each` |
 | Build | `npm run build` | exit 0; `dist/sw.js`; `precache 9 entries` |
+| Types | `npm run check:types` | exit 0, zero errors |
 | Precache manifest injected | `grep index.html dist/sw.js` | `"url":"index.html"` present |
 | SW is classic-compatible | `grep -c '^import' dist/sw.js` | `0` |
 | Assets copied | `ls dist/icons dist/_headers dist/manifest.json` | all present |

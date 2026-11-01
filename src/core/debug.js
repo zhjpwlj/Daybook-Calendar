@@ -1,10 +1,20 @@
+/** @typedef {{ level: string, at: number, text: string }} Entry */
+
 const MAX_ENTRIES = 100;
+/** @type {Entry[]} */
 const entries = [];
+/** @type {HTMLElement | undefined} */
 let panel;
+/** @type {HTMLOListElement | undefined} */
 let list;
+/** @type {HTMLDivElement | undefined} */
 let actions;
 let installed = false;
 
+/**
+ * @param {string} label
+ * @param {() => void | Promise<void>} handler
+ */
 export function addDebugAction(label, handler) {
   if (!actions) return;
   const button = document.createElement('button');
@@ -20,6 +30,10 @@ export function addDebugAction(label, handler) {
   actions.append(button);
 }
 
+/**
+ * @param {string} label
+ * @param {unknown} [detail]
+ */
 export function log(label, detail) {
   push('log', [label, detail]);
 }
@@ -28,9 +42,13 @@ export function installDebug() {
   if (installed) return;
   installed = true;
 
+  const target = /** @type {Record<string, (...args: any[]) => void>} */ (
+    /** @type {unknown} */ (console)
+  );
   for (const level of ['log', 'info', 'warn', 'error']) {
-    const original = console[level].bind(console);
-    console[level] = (...args) => {
+    const original = target[level];
+    if (!original) continue;
+    target[level] = (/** @type {any[]} */ ...args) => {
       push(level, args);
       original(...args);
     };
@@ -48,6 +66,10 @@ export function installDebug() {
   bindLongPress();
 }
 
+/**
+ * @param {string} level
+ * @param {any[]} args
+ */
 function push(level, args) {
   const entry = {
     level,
@@ -59,6 +81,10 @@ function push(level, args) {
   if (panel && !panel.hidden) append(entry);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
 function formatArg(value) {
   if (value === undefined) return 'undefined';
   if (value === null) return 'null';
@@ -101,11 +127,15 @@ function buildPanel() {
   document.body.append(panel);
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !panel.hidden) toggle(false);
+    if (event.key === 'Escape' && panel && !panel.hidden) toggle(false);
   });
 }
 
+/**
+ * @param {Entry} entry
+ */
 function append(entry) {
+  if (!list) return;
   const item = document.createElement('li');
   item.dataset.level = entry.level;
   item.textContent = `${(entry.at / 1000).toFixed(2)}s ${entry.level.toUpperCase()} ${entry.text}`;
@@ -113,9 +143,13 @@ function append(entry) {
   list.scrollTop = list.scrollHeight;
 }
 
+/**
+ * @param {boolean} [force]
+ */
 function toggle(force) {
+  if (!panel) return;
   panel.hidden = force === undefined ? !panel.hidden : !force;
-  if (!panel.hidden) {
+  if (!panel.hidden && list) {
     list.replaceChildren();
     for (const entry of entries) append(entry);
   }
@@ -125,6 +159,7 @@ function bindLongPress() {
   const title = document.getElementById('app-title');
   if (!title) return;
 
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timer;
   const start = () => {
     clearTimeout(timer);

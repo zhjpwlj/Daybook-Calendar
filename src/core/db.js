@@ -1,8 +1,10 @@
 const DB_NAME = 'daybook';
 const DB_VERSION = 1;
 
+/** @type {Promise<IDBDatabase> | undefined} */
 let openPromise;
 
+/** @returns {Promise<IDBDatabase>} */
 function open() {
   if (!openPromise) {
     openPromise = new Promise((resolve, reject) => {
@@ -49,6 +51,11 @@ function open() {
 export const db = {
   open,
 
+  /**
+   * @param {string} store
+   * @param {IDBValidKey} key
+   * @returns {Promise<any>}
+   */
   async get(store, key) {
     const database = await open();
     return new Promise((resolve, reject) => {
@@ -58,6 +65,12 @@ export const db = {
     });
   },
 
+  /**
+   * @param {string} store
+   * @param {string} [index]
+   * @param {IDBValidKey | IDBKeyRange} [query]
+   * @returns {Promise<any[]>}
+   */
   async getAll(store, index, query) {
     const database = await open();
     return new Promise((resolve, reject) => {
@@ -68,59 +81,90 @@ export const db = {
     });
   },
 
+  /**
+   * @param {string} store
+   * @param {any} value
+   * @returns {Promise<void>}
+   */
   async put(store, value) {
     const database = await open();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(store, 'readwrite');
-      transaction.objectStore(store).put(value);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error);
-    });
+    return /** @type {Promise<void>} */ (
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(store, 'readwrite');
+        transaction.objectStore(store).put(value);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      })
+    );
   },
 
+  /**
+   * @param {string} store
+   * @param {IDBValidKey} key
+   * @returns {Promise<void>}
+   */
   async delete(store, key) {
     const database = await open();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(store, 'readwrite');
-      transaction.objectStore(store).delete(key);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error);
-    });
+    return /** @type {Promise<void>} */ (
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(store, 'readwrite');
+        transaction.objectStore(store).delete(key);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      })
+    );
   },
 
+  /**
+   * @param {string} store
+   * @returns {Promise<void>}
+   */
   async clear(store) {
     const database = await open();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(store, 'readwrite');
-      transaction.objectStore(store).clear();
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error);
-    });
+    return /** @type {Promise<void>} */ (
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(store, 'readwrite');
+        transaction.objectStore(store).clear();
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      })
+    );
   },
 
+  /**
+   * @template T
+   * @param {string | string[]} stores
+   * @param {IDBTransactionMode} mode
+   * @param {(transaction: IDBTransaction) => T} fn
+   * @returns {Promise<T>}
+   */
   async transaction(stores, mode, fn) {
     const database = await open();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(stores, mode);
-      let result;
+    return /** @type {Promise<T>} */ (
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(stores, mode);
+        /** @type {any} */
+        let result;
 
-      transaction.oncomplete = () => resolve(result);
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error || new Error('Transaction aborted'));
+        transaction.oncomplete = () => resolve(result);
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () =>
+          reject(transaction.error || new Error('Transaction aborted'));
 
-      try {
-        result = fn(transaction);
-      } catch (error) {
         try {
-          transaction.abort();
-        } catch {
-          // Already aborted.
+          result = fn(transaction);
+        } catch (error) {
+          try {
+            transaction.abort();
+          } catch {
+            // Already aborted.
+          }
+          reject(error);
         }
-        reject(error);
-      }
-    });
+      })
+    );
   },
 };

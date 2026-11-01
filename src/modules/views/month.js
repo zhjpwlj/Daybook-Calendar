@@ -4,10 +4,21 @@ import { log as debugLog } from '../../core/debug.js';
 import { store } from '../../core/store.js';
 import { openDay, openDetail, openEditor } from '../event-panel.js';
 
+/** @typedef {import('@js-temporal/polyfill').Temporal.ZonedDateTime} ZonedDateTime */
+/** @typedef {import('../../core/types.js').Event} Event */
+/** @typedef {import('../../core/types.js').Calendar} Calendar */
+
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WEEK_STARTS_ON = 0;
 const MAX_CHIPS = 3;
 
+/**
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag
+ * @param {string | null} [className]
+ * @param {string} [text]
+ * @returns {HTMLElementTagNameMap[K]}
+ */
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -15,6 +26,12 @@ function el(tag, className, text) {
   return node;
 }
 
+/**
+ * @param {string} className
+ * @param {string} label
+ * @param {string} text
+ * @returns {HTMLButtonElement}
+ */
 function button(className, label, text) {
   const node = el('button', className, text);
   node.type = 'button';
@@ -22,10 +39,13 @@ function button(className, label, text) {
   return node;
 }
 
+/** @param {HTMLElement} container */
 export function createMonthView(container) {
+  /** @type {ZonedDateTime} */
   let current = dt.nowZoned();
   let renderToken = 0;
 
+  /** @param {ZonedDateTime} [anchor] */
   async function render(anchor = current) {
     current = anchor;
     const token = ++renderToken;
@@ -42,14 +62,16 @@ export function createMonthView(container) {
     if (token !== renderToken) return;
 
     const calendarById = new Map(store.getCalendars().map((calendar) => [calendar.id, calendar]));
+    /** @type {Map<string, Event[]>} */
     const byDay = new Map();
 
     for (const event of events) {
       const key = event.all_day
         ? event.all_day_start
         : dt.toDateString(event.dtstart_utc);
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key).push(event);
+      const bucket = byDay.get(key) ?? [];
+      bucket.push(event);
+      byDay.set(key, bucket);
     }
 
     for (const dayEvents of byDay.values()) {
@@ -145,7 +167,12 @@ export function createMonthView(container) {
       }
 
       cell.addEventListener('click', (clickEvent) => {
-        if (clickEvent.target.closest('.event-chip, .month-more')) return;
+        if (
+          clickEvent.target instanceof Element &&
+          clickEvent.target.closest('.event-chip, .month-more')
+        ) {
+          return;
+        }
         openEditor({ dateKey: key });
       });
       cell.addEventListener('keydown', (keyEvent) => {

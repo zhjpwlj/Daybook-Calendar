@@ -3,6 +3,8 @@ import { dt } from '../core/datetime.js';
 import { log as debugLog } from '../core/debug.js';
 import { store } from '../core/store.js';
 
+/** @typedef {import('../core/types.js').Event} Event */
+
 const DAYS = 3650;
 const TIMES = [9, 10, 12, 15, 17];
 const BATCH_SIZE = 1000;
@@ -14,6 +16,7 @@ export async function seedEvents() {
 
   const now = dt.nowUtc();
   const firstDay = dt.nowZoned().startOfDay().subtract({ years: 5 });
+  /** @type {Event[]} */
   let batch = [];
   let written = 0;
 

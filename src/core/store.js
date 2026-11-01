@@ -2,18 +2,30 @@ import { bus } from './bus.js';
 import { db } from './db.js';
 import { dt } from './datetime.js';
 
+/** @typedef {import('./types.js').Event} Event */
+/** @typedef {import('./types.js').EventDraft} EventDraft */
+/** @typedef {import('./types.js').Calendar} Calendar */
+
 const DEFAULT_CALENDAR = {
   name: 'Personal',
   color: '#5B7FFF',
 };
 
+/**
+ * @template T
+ * @param {T} value
+ * @returns {T}
+ */
 function clone(value) {
   return structuredClone(value);
 }
 
 export const store = {
+  /** @type {Event[]} */
   events: [],
+  /** @type {Calendar[]} */
   calendars: [],
+  /** @type {Record<string, any>} */
   settings: {},
 
   async load() {
@@ -28,6 +40,7 @@ export const store = {
     this.settings = Object.fromEntries(settingsRows.map((row) => [row.key, row.value]));
 
     if (this.calendars.length === 0) {
+      /** @type {Calendar} */
       const calendar = {
         id: crypto.randomUUID(),
         name: DEFAULT_CALENDAR.name,
@@ -47,6 +60,12 @@ export const store = {
     });
   },
 
+  /**
+   * @param {number} startUtc
+   * @param {number} endUtc
+   * @param {string[] | null} [calendarIds]
+   * @returns {Promise<Event[]>}
+   */
   async getEventsInRange(startUtc, endUtc, calendarIds) {
     const ids = new Set(calendarIds ?? this.getVisibleCalendarIds());
     const startDate = dt.toDateString(startUtc);
@@ -63,10 +82,18 @@ export const store = {
       });
   },
 
+  /**
+   * @param {string} id
+   * @returns {Event | null}
+   */
   getEvent(id) {
     return this.events.find((event) => event.id === id) ?? null;
   },
 
+  /**
+   * @param {EventDraft} data
+   * @returns {Promise<Event>}
+   */
   async createEvent(data) {
     const calendarId =
       data.calendar_id ?? this.getVisibleCalendarIds()[0] ?? this.calendars[0]?.id;
@@ -74,6 +101,7 @@ export const store = {
     if (!calendarId) throw new Error('Cannot create an event without a calendar');
 
     const now = dt.nowUtc();
+    /** @type {Event} */
     const event = {
       description: null,
       location: null,
@@ -81,7 +109,6 @@ export const store = {
       dtstart_tzid: null,
       dtend_utc: null,
       dtend_tzid: null,
-      all_day: false,
       all_day_start: null,
       all_day_end: null,
       rrule: null,
@@ -111,19 +138,28 @@ export const store = {
     return event;
   },
 
+  /**
+   * @param {string} id
+   * @param {EventDraft} patch
+   * @returns {Promise<Event>}
+   */
   async updateEvent(id, patch) {
     const existing = this.getEvent(id);
     if (!existing) throw new Error(`Event not found: ${id}`);
 
     const previous = clone(existing);
-    const event = {
-      ...existing,
-      ...patch,
-      id: existing.id,
-      uid: existing.uid,
-      created_at: existing.created_at,
-      modified_at: dt.nowUtc(),
-    };
+    // The spread pairs a union [existing] with a union [patch]; runtime shape is
+    // one Event variant, which the declared literals cannot express.
+    const event = /** @type {Event} */ (
+      /** @type {unknown} */ ({
+        ...existing,
+        ...patch,
+        id: existing.id,
+        uid: existing.uid,
+        created_at: existing.created_at,
+        modified_at: dt.nowUtc(),
+      })
+    );
 
     await db.put('events', event);
     this.events[this.events.indexOf(existing)] = event;
@@ -133,6 +169,10 @@ export const store = {
     return event;
   },
 
+  /**
+   * @param {string} id
+   * @returns {Promise<void>}
+   */
   async deleteEvent(id) {
     const existing = this.getEvent(id);
     if (!existing) throw new Error(`Event not found: ${id}`);
@@ -148,11 +188,20 @@ export const store = {
     return this.calendars;
   },
 
+  /**
+   * @param {string} id
+   * @returns {Calendar | null}
+   */
   getCalendar(id) {
     return this.calendars.find((calendar) => calendar.id === id) ?? null;
   },
 
+  /**
+   * @param {Partial<Calendar>} data
+   * @returns {Promise<Calendar>}
+   */
   async createCalendar(data) {
+    /** @type {Calendar} */
     const calendar = {
       id: crypto.randomUUID(),
       name: data.name ?? 'Calendar',
@@ -171,10 +220,16 @@ export const store = {
     return calendar;
   },
 
+  /**
+   * @param {string} id
+   * @param {Partial<Calendar>} patch
+   * @returns {Promise<Calendar>}
+   */
   async updateCalendar(id, patch) {
     const existing = this.getCalendar(id);
     if (!existing) throw new Error(`Calendar not found: ${id}`);
 
+    /** @type {Calendar} */
     const calendar = {
       ...existing,
       ...patch,
@@ -196,6 +251,11 @@ export const store = {
     return calendar;
   },
 
+  /**
+   * @param {string} id
+   * @param {{ reassignTo?: string | null }} [options]
+   * @returns {Promise<void>}
+   */
   async deleteCalendar(id, { reassignTo } = {}) {
     const calendar = this.getCalendar(id);
     if (!calendar) throw new Error(`Calendar not found: ${id}`);
@@ -230,6 +290,7 @@ export const store = {
     bus.emit('calendar-deleted', { calendar, reassignTo: reassignTo ?? null });
   },
 
+  /** @returns {string[]} */
   getVisibleCalendarIds() {
     return this.calendars.filter((calendar) => calendar.visible).map((calendar) => calendar.id);
   },

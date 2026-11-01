@@ -48,7 +48,9 @@ window.addEventListener('orientationchange', () => {
   setTimeout(syncAppHeight, 150);
 });
 
-const themeSelect = document.getElementById('theme-select');
+const themeSelect = /** @type {HTMLSelectElement} */ (
+  document.getElementById('theme-select')
+);
 themeSelect.value = applyTheme(currentTheme(), { persist: false });
 themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
 
@@ -62,7 +64,8 @@ bus.on('theme-changed', ({ detail }) => {
   debugLog('theme', detail.theme);
 });
 
-document.getElementById('app-version').textContent = `v${__APP_VERSION__}`;
+const versionLabel = document.getElementById('app-version');
+if (versionLabel) versionLabel.textContent = `v${__APP_VERSION__}`;
 
 debugLog('boot', {
   version: __APP_VERSION__,
@@ -78,7 +81,7 @@ debugLog('boot', {
 
 async function boot() {
   const started = performance.now();
-  const viewRoot = document.getElementById('view-root');
+  const viewRoot = /** @type {HTMLElement} */ (document.getElementById('view-root'));
 
   try {
     await store.load();
@@ -98,6 +101,9 @@ async function boot() {
   }
 }
 
+/**
+ * @param {HTMLElement} container
+ */
 function showBootError(container) {
   const box = document.createElement('div');
   box.className = 'boot-error';
@@ -149,9 +155,14 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   });
 }
 
+/**
+ * @param {ServiceWorker} worker
+ */
 function showUpdateBanner(worker) {
-  const banner = document.getElementById('update-banner');
-  const reload = document.getElementById('update-reload');
+  const banner = /** @type {HTMLElement} */ (document.getElementById('update-banner'));
+  const reload = /** @type {HTMLButtonElement} */ (
+    document.getElementById('update-reload')
+  );
   banner.hidden = false;
   reload.focus();
 

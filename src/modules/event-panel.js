@@ -1,12 +1,27 @@
 import { dt } from '../core/datetime.js';
 import { store } from '../core/store.js';
 
+/** @typedef {import('@js-temporal/polyfill').Temporal.ZonedDateTime} ZonedDateTime */
+/** @typedef {import('../core/types.js').Event} Event */
+/** @typedef {import('../core/types.js').EventDraft} EventDraft */
+
+/** @type {Intl.DateTimeFormatOptions} */
 const DATE_LABEL = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+/** @type {Intl.DateTimeFormatOptions} */
 const SHORT_DATE = { month: 'short', day: 'numeric' };
+/** @type {Intl.DateTimeFormatOptions} */
 const TIME_LABEL = { hour: 'numeric', minute: '2-digit' };
 
+/** @type {HTMLDialogElement | undefined} */
 let dialog;
 
+/**
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag
+ * @param {string | null} [className]
+ * @param {string} [text]
+ * @returns {HTMLElementTagNameMap[K]}
+ */
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -14,6 +29,12 @@ function el(tag, className, text) {
   return node;
 }
 
+/**
+ * @param {string} label
+ * @param {string} text
+ * @param {string} [className]
+ * @returns {HTMLButtonElement}
+ */
 function button(label, text, className) {
   const node = el('button', className, text);
   node.type = 'button';
@@ -21,17 +42,19 @@ function button(label, text, className) {
   return node;
 }
 
+/** @returns {HTMLDialogElement} */
 function getDialog() {
   if (dialog) return dialog;
   dialog = document.createElement('dialog');
   dialog.className = 'event-panel';
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
+    if (event.target === dialog) close();
   });
   document.body.append(dialog);
   return dialog;
 }
 
+/** @param {Node} node */
 function open(node) {
   const panel = getDialog();
   panel.replaceChildren(node);
@@ -42,6 +65,11 @@ function close() {
   if (dialog?.open) dialog.close();
 }
 
+/**
+ * @param {string} title
+ * @param {{ left?: Node | null, right?: Node | null }} [options]
+ * @returns {HTMLElement}
+ */
 function header(title, { left, right } = {}) {
   const head = el('header', 'event-panel-head');
   const start = left ?? el('span', 'event-panel-spacer');
@@ -51,10 +79,18 @@ function header(title, { left, right } = {}) {
   return head;
 }
 
+/**
+ * @param {ZonedDateTime} zoned
+ * @returns {string}
+ */
 function timeOf(zoned) {
   return zoned.toPlainTime().toString({ smallestUnit: 'minute' });
 }
 
+/**
+ * @param {Event} event
+ * @returns {string}
+ */
 function whenLabel(event) {
   if (event.all_day) {
     const start = dt.fromDateString(event.all_day_start);
@@ -73,6 +109,10 @@ function whenLabel(event) {
   return `${dt.format(start, { ...DATE_LABEL, ...TIME_LABEL })} – ${dt.format(end, { ...DATE_LABEL, ...TIME_LABEL })}`;
 }
 
+/**
+ * @param {Event} event
+ * @returns {HTMLButtonElement}
+ */
 function eventRow(event) {
   const row = button('open-event', '', 'event-day-row');
   row.dataset.eventId = event.id;
@@ -88,6 +128,10 @@ function eventRow(event) {
   return row;
 }
 
+/**
+ * @param {Event[]} events
+ * @returns {Event[]}
+ */
 function sortEvents(events) {
   return [...events].sort((a, b) => {
     if (a.all_day !== b.all_day) return a.all_day ? -1 : 1;
@@ -95,6 +139,7 @@ function sortEvents(events) {
   });
 }
 
+/** @param {string} eventId */
 export function openDetail(eventId) {
   const event = store.getEvent(eventId);
   if (!event) return;
@@ -138,6 +183,7 @@ export function openDetail(eventId) {
   open(view);
 }
 
+/** @param {string} dateKey */
 export async function openDay(dateKey) {
   const dayStart = dt.fromDateString(dateKey);
   const events = sortEvents(
@@ -164,12 +210,19 @@ export async function openDay(dateKey) {
   closeButton.addEventListener('click', close);
   add.addEventListener('click', () => openEditor({ dateKey }));
   for (const row of view.querySelectorAll('.event-day-row')) {
-    row.addEventListener('click', () => openDetail(row.dataset.eventId));
+    row.addEventListener('click', () => {
+      const eventId = /** @type {HTMLElement} */ (row).dataset.eventId;
+      if (eventId) openDetail(eventId);
+    });
   }
 
   open(view);
 }
 
+/**
+ * @param {string | null} dateKey
+ * @returns {{ startDate: string, startTime: string, endDate: string, endTime: string }}
+ */
 function defaultSlot(dateKey) {
   const now = dt.nowZoned();
   const today = now.toPlainDate().toString();
@@ -188,6 +241,9 @@ function defaultSlot(dateKey) {
   return { startDate: dateKey, startTime: '09:00', endDate: dateKey, endTime: '10:00' };
 }
 
+/**
+ * @param {{ event?: Event | null, dateKey?: string | null }} [options]
+ */
 export function openEditor({ event = null, dateKey = null } = {}) {
   const slot = event ? null : defaultSlot(dateKey);
   const start = event && !event.all_day ? dt.toZoned(event.dtstart_utc) : null;
@@ -196,9 +252,6 @@ export function openEditor({ event = null, dateKey = null } = {}) {
     : event?.dtend_utc
       ? dt.toZoned(event.dtend_utc)
       : (start?.add({ hours: 1 }) ?? null);
-  const allDayEnd = event?.all_day
-    ? (event.all_day_end ?? dt.addDaysToDateString(event.all_day_start, 1))
-    : null;
 
   const view = el('form', 'event-form');
   view.noValidate = true;
@@ -227,24 +280,26 @@ export function openEditor({ event = null, dateKey = null } = {}) {
   startDate.id = 'event-start-date';
   startDate.type = 'date';
   startDate.value =
-    (event?.all_day ? event.all_day_start : start?.toPlainDate().toString()) ?? slot.startDate;
+    (event?.all_day ? event.all_day_start : start?.toPlainDate().toString()) ??
+    slot?.startDate ??
+    '';
 
   const startTime = el('input', 'event-input');
   startTime.id = 'event-start-time';
   startTime.type = 'time';
-  startTime.value = start ? timeOf(start) : slot.startTime;
+  startTime.value = start ? timeOf(start) : (slot?.startTime ?? '');
 
   const endDate = el('input', 'event-input');
   endDate.id = 'event-end-date';
   endDate.type = 'date';
   endDate.value = event?.all_day
-    ? dt.addDaysToDateString(allDayEnd, -1)
-    : (end?.toPlainDate().toString() ?? slot.endDate);
+    ? dt.addDaysToDateString(event.all_day_end, -1)
+    : (end?.toPlainDate().toString() ?? slot?.endDate ?? '');
 
   const endTime = el('input', 'event-input');
   endTime.id = 'event-end-time';
   endTime.type = 'time';
-  endTime.value = end ? timeOf(end) : slot.endTime;
+  endTime.value = end ? timeOf(end) : (slot?.endTime ?? '');
 
   const startTimeWrap = el('span', 'event-time');
   startTimeWrap.append(startTime);
@@ -276,7 +331,10 @@ export function openEditor({ event = null, dateKey = null } = {}) {
   error.hidden = true;
   error.setAttribute('role', 'alert');
 
-  const row = (labelText, control) => {
+  const row = (
+    /** @type {string} */ labelText,
+    /** @type {HTMLElement} */ control,
+  ) => {
     const wrapper = el('label', 'event-row');
     wrapper.append(el('span', 'event-label', labelText), control);
     return wrapper;
@@ -316,6 +374,7 @@ export function openEditor({ event = null, dateKey = null } = {}) {
   view.addEventListener('submit', async (submitEvent) => {
     submitEvent.preventDefault();
 
+    /** @param {string} message */
     const showError = (message) => {
       error.textContent = message;
       error.hidden = false;
@@ -333,12 +392,16 @@ export function openEditor({ event = null, dateKey = null } = {}) {
       description: description.value.trim() || null,
     };
 
+    /** @type {EventDraft} */
+    let draft;
+
     if (allDay.checked) {
       if (endDate.value < startDate.value) {
         showError('End date cannot be before the start date.');
         return;
       }
-      Object.assign(patch, {
+      draft = {
+        ...patch,
         all_day: true,
         all_day_start: startDate.value,
         all_day_end: dt.addDaysToDateString(endDate.value, 1),
@@ -346,7 +409,7 @@ export function openEditor({ event = null, dateKey = null } = {}) {
         dtstart_tzid: null,
         dtend_utc: null,
         dtend_tzid: null,
-      });
+      };
     } else {
       if (!startTime.value || !endTime.value) {
         showError('Pick a start and end time.');
@@ -365,7 +428,8 @@ export function openEditor({ event = null, dateKey = null } = {}) {
         showError('End must be after start.');
         return;
       }
-      Object.assign(patch, {
+      draft = {
+        ...patch,
         all_day: false,
         all_day_start: null,
         all_day_end: null,
@@ -373,13 +437,13 @@ export function openEditor({ event = null, dateKey = null } = {}) {
         dtstart_tzid: startZoned.timeZoneId,
         dtend_utc: dt.toUtc(endZoned),
         dtend_tzid: endZoned.timeZoneId,
-      });
+      };
     }
 
     if (event) {
-      await store.updateEvent(event.id, patch);
+      await store.updateEvent(event.id, draft);
     } else {
-      await store.createEvent(patch);
+      await store.createEvent(draft);
     }
 
     close();
