@@ -1,40 +1,25 @@
 import { bus } from '../core/bus.js';
 
-/** @typedef {import('../core/types.js').ThemeName} ThemeName */
-
 const STORAGE_KEY = 'daybook.theme';
-/** @type {ReadonlyArray<ThemeName>} */
 export const THEMES = ['light', 'dark', 'apple', 'google'];
 
-/** @returns {ThemeName} */
 export function systemTheme() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-/** @returns {boolean} */
 export function hasStoredTheme() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved !== null && THEMES.includes(/** @type {ThemeName} */ (saved));
+    return THEMES.includes(localStorage.getItem(STORAGE_KEY));
   } catch {
     return false;
   }
 }
 
-/**
- * @param {ThemeName | string} name
- * @param {{ persist?: boolean }} [options]
- * @returns {ThemeName}
- */
 export function applyTheme(name, { persist = true } = {}) {
-  const theme = THEMES.includes(/** @type {ThemeName} */ (name))
-    ? /** @type {ThemeName} */ (name)
-    : systemTheme();
+  const theme = THEMES.includes(name) ? name : systemTheme();
   document.documentElement.dataset.theme = theme;
 
-  const meta = /** @type {HTMLMetaElement | null} */ (
-    document.querySelector('meta[name="theme-color"]')
-  );
+  const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
     meta.content = getComputedStyle(document.documentElement)
       .getPropertyValue('--bg-primary')
@@ -53,13 +38,10 @@ export function applyTheme(name, { persist = true } = {}) {
   return theme;
 }
 
-/** @returns {ThemeName} */
 export function currentTheme() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved !== null && THEMES.includes(/** @type {ThemeName} */ (saved))) {
-      return /** @type {ThemeName} */ (saved);
-    }
+    if (THEMES.includes(saved)) return saved;
   } catch {
     // Fall back to the system theme.
   }

@@ -3,7 +3,6 @@
 Amendments to `spec.md` v1.0. Each entry names the spec part it changes and the reason. Spec v1.0.1 is v1.0 with R1–R13 applied. The on-disk `spec.md` was not present when M1 was built; these entries are the authoritative delta.
 
 ## Spec corrections
-
 ### R1 — All-day DTEND on or before DTSTART
 
 Part 11. If an imported all-day event has `DTEND;VALUE=DATE` equal to or before `DTSTART`, store one day: `all_day_start = DTSTART`, `all_day_end = DTSTART + 1 day`, and warn `Non-RFC DTEND on all-day event; treated as one day`. Applies to date-valued DTEND only. Replaces the self-correcting paragraph in Part 11.
@@ -56,6 +55,29 @@ Part 4, Part 6. For scalar settings, localStorage is authoritative. Write localS
 
 Part 14, M10. Handoff into the installed PWA is confirmed by the user: M10 stays unconditional. Callback page stores `{access_token, expires_at}` in sessionStorage and calls `location.replace('/?oauth=<provider>')`; drop the `postMessage` to a parent, since no opener is guaranteed. Boot reads and clears the token. No token on boot means `oauth-failed` ("Import cancelled") and no state change. V-CSP-1 remains a blocking verification but no longer gates whether M10 exists.
 
+### R14 — V-Store-1 runs at M2
+
+Appendix A/B, M2. V-Store-1 needs 18,250 events rendered in Month, but M2 was scoped as an empty Month view and import arrives M7. M2 therefore includes read-only Month chips and a debug-only seed fixture (18,250 deterministic events, idempotent). The gate stays at M2. Multi-day chip spanning remains M6.
+
+## M2 build deviations
+
+- **Seed/Clear live in the debug panel**, behind long-press. Temporary test tooling; remove before v1.0.
+- **Month chips are read-only.** Tap-to-create and the editor are M3.
+- **Multi-day all-day events render only on the start day.** Spanning cells are M6.
+- **`week_starts_on` is hardcoded to Sunday.** Settings wiring is M14.
+- **Calendar CRUD is store-level only.** No management UI yet.
+- **`core/datetime.js` formatter cache.** `Intl.DateTimeFormat` allocation per cell pushed render past 200 ms; one formatter per timezone/options key fixed it.
+- **Headless boot is 460 ms** with 18,250 events; month render is 133 ms. On iPad: render **78 ms**, boot **272 ms**. Render gate passes; boot stays ungated.
+
+## M3 build deviations
+
+- **Editor scope assumed.** `spec.md` was absent and the user said continue; fields are title, all-day, start/end, calendar, location, notes. Recurrence and reminders stay out.
+- **One `<dialog>` for editor, detail, and day list.** Native modal gives Escape, focus containment, and a backdrop without custom code.
+- **All-day end is inclusive in the UI, exclusive in storage**, matching iCal `DTEND` and R1.
+- **Delete uses `window.confirm`.** In-app confirmation is deferred until the design system has one.
+- **`--danger` token added to all four themes.**
+- **Hardware checks pending** for tap targets, sheet height, native date/time pickers, and rotation.
+
 ## M1 additions (user request)
 
 - **System theme default.** With no stored choice, the theme follows `prefers-color-scheme` and updates live when the system flips. Picking a theme in the select stores it and stops system following. Apple/Google skins remain manual.
@@ -68,17 +90,3 @@ Part 14, M10. Handoff into the installed PWA is confirmed by the user: M10 stays
 - **`postcss` is a dev dependency** for `scripts/lint-themes.mjs`. It enforces: theme files declare only `--*` custom properties, no `!important`, and all four themes define the same token set. Vite already ships postcss; the entry makes the dependency explicit.
 - **`index.html` lives at the repo root**, because Vite requires it there. The brief's layout omitted it.
 - **Theme bootstrap is `public/theme-init.js`**, an external classic script. Inline script would be blocked by the CSP.
-
-### R14 — JSDoc types checked by tsc (B10)
-
-- **Part amended:** brief Stack/Language; spec Part 6; M2 and final-type verification.
-- **Triggered during:** pre-M2.
-- **Priority:** Important.
-- **What changed:** Source stays `.js`. JSDoc on exported signatures and on shared shapes. `tsc --checkJs` runs without emit via `npm run check:types`. Shared typedefs live in `src/core/types.d.ts`: `Event` (all-day/timed discriminated union), `Calendar`, `Reminder`, `Settings`, `Occurrence`, `Platform`.
-- **Why:** Part 4 invariants are silent corruption if violated: all-day vs timed null pairs, paired TZID/UTC, exclusive all-day DTEND. Strict null checks catch them at the boundary.
-- **Adaptations from the B10 pack:** `tsconfig.json` is at the repo root because there is no `scaffolding/` directory. TypeScript resolves as 5.9.3 under `^5.6.3`. `types: []` retained; `vite/client` is referenced from `src/vite-env.d.ts`, which also declares `__APP_VERSION__` and iOS `navigator.standalone`. `sw.js` casts `self` to `ServiceWorkerGlobalScope` because the project loads both DOM and WebWorker libs so one tsconfig covers app and worker.
-- **M1 files are annotated now.** The pack's R-1 annotate-on-touch fallback is unused: `check:types` passes with zero errors on the M1 codebase.
-- **Downstream:** every M2+ review includes `npm run check:types`. M15/M19 do not exist in the current M1–M14 plan; their V-Types-1 check attaches to the final milestone whenever that is defined.
-- **Resolved:** yes.
-
-Build-tooling note: `npm audit` reports 10 advisories, all in dev-only transitives of `vite-plugin-pwa`/`workbox-build` (ejs, minimatch, glob, deepmerge, rollup plugins). Runtime bundle has no server dependency. No fix without a breaking build-tool change; revisit at M9 when the SW is final.

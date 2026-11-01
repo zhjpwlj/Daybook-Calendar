@@ -5,17 +5,34 @@ import './styles/themes/apple.css';
 import './styles/themes/google.css';
 import './styles/base.css';
 import './styles/app.css';
+import './styles/month.css';
+import './styles/editor.css';
 
 import { bus } from './core/bus.js';
-import { installDebug, log as debugLog } from './core/debug.js';
+import { dt } from './core/datetime.js';
+import { addDebugAction, installDebug, log as debugLog } from './core/debug.js';
+import { store } from './core/store.js';
 import {
   applyTheme,
   currentTheme,
   hasStoredTheme,
   systemTheme,
 } from './modules/theme.js';
+import { createMonthView } from './modules/views/month.js';
 
 installDebug();
+
+addDebugAction('Seed 10y', async () => {
+  if (!window.confirm('Write 18,250 seeded events?')) return;
+  const { seedEvents } = await import('./dev/seed.js');
+  await seedEvents();
+});
+
+addDebugAction('Clear events', async () => {
+  if (!window.confirm('Delete ALL events? This cannot be undone.')) return;
+  const { clearEvents } = await import('./dev/seed.js');
+  await clearEvents();
+});
 
 const root = document.documentElement;
 
@@ -31,9 +48,7 @@ window.addEventListener('orientationchange', () => {
   setTimeout(syncAppHeight, 150);
 });
 
-const themeSelect = /** @type {HTMLSelectElement} */ (
-  document.getElementById('theme-select')
-);
+const themeSelect = document.getElementById('theme-select');
 themeSelect.value = applyTheme(currentTheme(), { persist: false });
 themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
 
@@ -47,8 +62,7 @@ bus.on('theme-changed', ({ detail }) => {
   debugLog('theme', detail.theme);
 });
 
-const versionLabel = document.getElementById('app-version');
-if (versionLabel) versionLabel.textContent = `v${__APP_VERSION__}`;
+document.getElementById('app-version').textContent = `v${__APP_VERSION__}`;
 
 debugLog('boot', {
   version: __APP_VERSION__,
@@ -61,6 +75,45 @@ debugLog('boot', {
   appHeight: root.style.getPropertyValue('--app-height'),
   dpr: window.devicePixelRatio,
 });
+
+async function boot() {
+  const started = performance.now();
+  const viewRoot = document.getElementById('view-root');
+
+  try {
+    await store.load();
+    const month = createMonthView(viewRoot);
+    await month.render(dt.nowZoned());
+
+    requestAnimationFrame(() => {
+      debugLog('boot:ready', {
+        ms: Number((performance.now() - started).toFixed(1)),
+        events: store.events.length,
+        calendars: store.calendars.length,
+      });
+    });
+  } catch (error) {
+    console.error('Boot failed', error);
+    showBootError(viewRoot);
+  }
+}
+
+function showBootError(container) {
+  const box = document.createElement('div');
+  box.className = 'boot-error';
+
+  const title = document.createElement('h2');
+  title.textContent = "Daybook can't start";
+
+  const detail = document.createElement('p');
+  detail.textContent =
+    'Daybook needs to store data on this device. Private browsing or full storage may be preventing this.';
+
+  box.append(title, detail);
+  container.replaceChildren(box);
+}
+
+boot();
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   const hadController = Boolean(navigator.serviceWorker.controller);
@@ -96,14 +149,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   });
 }
 
-/**
- * @param {ServiceWorker} worker
- */
 function showUpdateBanner(worker) {
-  const banner = /** @type {HTMLElement} */ (document.getElementById('update-banner'));
-  const reload = /** @type {HTMLButtonElement} */ (
-    document.getElementById('update-reload')
-  );
+  const banner = document.getElementById('update-banner');
+  const reload = document.getElementById('update-reload');
   banner.hidden = false;
   reload.focus();
 
