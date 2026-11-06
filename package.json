@@ -11,11 +11,13 @@
     "lint:themes": "node scripts/lint-themes.mjs",
     "check:types": "tsc -p tsconfig.json",
     "build": "npm run lint:themes && vite build",
+    "test:recurrence": "node --test src/core/ics/recurrence.test.js",
     "preview": "vite preview",
     "smoke": "node scripts/browser-smoke.mjs"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
+    "rrule": "2.8.1",
     "workbox-core": "^7.4.1",
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1"
