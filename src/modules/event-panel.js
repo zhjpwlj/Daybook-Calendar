@@ -1,4 +1,7 @@
-import { dt } from '../core/datetime.js';
+import { Temporal } from '@js-temporal/polyfill';
+import { dt, getSystemTimezone } from '../core/datetime.js';
+import { log as debugLog } from '../core/debug.js';
+import { validateEditorRrule } from '../core/ics/validate.js';
 import { store } from '../core/store.js';
 
 /** @typedef {import('@js-temporal/polyfill').Temporal.ZonedDateTime} ZonedDateTime */
@@ -110,6 +113,49 @@ function whenLabel(event) {
   return `${dt.format(start, { ...DATE_LABEL, ...TIME_LABEL })} – ${dt.format(end, { ...DATE_LABEL, ...TIME_LABEL })}`;
 }
 
+/** @type {readonly string[]} */
+const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+
+/** @typedef {'none' | 'daily' | 'weekly' | 'weekdays' | 'monthly' | 'yearly' | 'custom'} RecurrencePreset */
+
+/**
+ * Map a stored rule back to an editor preset. Anything we cannot reproduce from
+ * a preset falls through to Custom so the raw text stays editable.
+ * @param {string} rule
+ * @returns {RecurrencePreset}
+ */
+function recurrencePreset(rule) {
+  const text = rule.trim().replace(/^RRULE:/i, '').toUpperCase();
+  if (text === 'FREQ=DAILY') return 'daily';
+  if (text === 'FREQ=YEARLY') return 'yearly';
+  if (/^FREQ=WEEKLY;BYDAY=[A-Z]{2}$/.test(text)) return 'weekly';
+  if (text === 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR') return 'weekdays';
+  if (/^FREQ=MONTHLY;BYMONTHDAY=\d{1,2}$/.test(text)) return 'monthly';
+  return 'custom';
+}
+
+/**
+ * @param {RecurrencePreset} preset
+ * @param {import('@js-temporal/polyfill').Temporal.PlainDate} date
+ * @returns {string | null}
+ */
+function ruleForPreset(preset, date) {
+  switch (preset) {
+    case 'daily':
+      return 'FREQ=DAILY';
+    case 'weekly':
+      return `FREQ=WEEKLY;BYDAY=${WEEKDAY_CODES[date.dayOfWeek - 1] ?? 'MO'}`;
+    case 'weekdays':
+      return 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+    case 'monthly':
+      return `FREQ=MONTHLY;BYMONTHDAY=${date.day}`;
+    case 'yearly':
+      return 'FREQ=YEARLY';
+    default:
+      return null;
+  }
+}
+
 /**
  * @param {Occurrence} occurrence
  * @returns {HTMLButtonElement}
@@ -141,6 +187,123 @@ function sortEvents(occurrences) {
     if (a.event.all_day !== b.event.all_day) return a.event.all_day ? -1 : 1;
     return a.startUtc - b.startUtc;
   });
+}
+
+/**
+ * Detach one occurrence: exclude it from the series, then create a standalone
+ * copy that the caller can edit.
+ * @param {Event} series
+ * @param {number} occurrenceStartUtc
+ */
+async function splitOccurrence(series, occurrenceStartUtc) {
+  /** @type {EventDraft} */
+  let draft;
+
+  if (series.all_day) {
+    const span = Temporal.PlainDate.from(series.all_day_start).until(
+      Temporal.PlainDate.from(series.all_day_end),
+    ).days;
+    const start = dt.toDateString(occurrenceStartUtc);
+    draft = {
+      summary: series.summary,
+      calendar_id: series.calendar_id,
+      location: series.location,
+      description: series.description,
+      all_day: true,
+      all_day_start: start,
+      all_day_end: dt.addDaysToDateString(start, Math.max(1, span)),
+      rrule: null,
+      rrule_supported: true,
+      exdates: null,
+      rdates: null,
+    };
+  } else {
+    const duration = (series.dtend_utc ?? series.dtstart_utc) - series.dtstart_utc;
+    const tzid = series.dtstart_tzid ?? getSystemTimezone();
+    draft = {
+      summary: series.summary,
+      calendar_id: series.calendar_id,
+      location: series.location,
+      description: series.description,
+      all_day: false,
+      dtstart_utc: occurrenceStartUtc,
+      dtstart_tzid: tzid,
+      dtend_utc: occurrenceStartUtc + duration,
+      dtend_tzid: series.dtend_tzid ?? tzid,
+      rrule: null,
+      rrule_supported: true,
+      exdates: null,
+      rdates: null,
+    };
+  }
+
+  /** @type {EventDraft} */
+  const seriesPatch = series.all_day
+    ? {
+        all_day: true,
+        all_day_start: series.all_day_start,
+        all_day_end: series.all_day_end,
+        exdates: [...(series.exdates ?? []), occurrenceStartUtc],
+      }
+    : {
+        all_day: false,
+        dtstart_utc: series.dtstart_utc,
+        dtstart_tzid: series.dtstart_tzid,
+        dtend_utc: series.dtend_utc,
+        dtend_tzid: series.dtend_tzid,
+        exdates: [...(series.exdates ?? []), occurrenceStartUtc],
+      };
+
+  await store.updateEvent(series.id, seriesPatch);
+  const copy = await store.createEvent(draft);
+  openEditor({ event: copy });
+}
+
+/**
+ * @param {Event} event
+ * @param {number} occurrenceStartUtc
+ */
+function openSeriesChoice(event, occurrenceStartUtc) {
+  const view = el('section', 'event-choice');
+  const closeButton = button('close', 'Cancel', 'event-plain');
+
+  const when = dt.toZoned(occurrenceStartUtc, event.all_day ? undefined : event.dtstart_tzid ?? undefined);
+  const hint = el(
+    'p',
+    'event-choice-hint',
+    event.all_day ? dt.format(when, DATE_LABEL) : dt.format(when, { ...DATE_LABEL, ...TIME_LABEL }),
+  );
+
+  const thisEvent = button('edit-occurrence', 'This event', 'event-choice-option');
+  const series = button('edit-series', 'Entire series', 'event-choice-option');
+  const following = button('edit-following', 'This and following', 'event-choice-option');
+
+  const notice = el('p', 'event-notice', '');
+  notice.hidden = true;
+  notice.setAttribute('role', 'status');
+
+  const body = el('div', 'event-panel-body');
+  body.append(hint, thisEvent, series, following, notice);
+
+  view.append(header('Edit repeating event', { right: closeButton }), body);
+  closeButton.addEventListener('click', close);
+
+  thisEvent.addEventListener('click', async () => {
+    await splitOccurrence(event, occurrenceStartUtc);
+  });
+  series.addEventListener('click', () => {
+    openEditor({ event, occurrenceStartUtc });
+  });
+  following.addEventListener('click', () => {
+    notice.textContent = 'Editing this and following occurrences is not supported yet.';
+    notice.hidden = false;
+    debugLog('recurrence:this-and-following', {
+      eventId: event.id,
+      occurrenceStartUtc,
+    });
+  });
+
+  open(view);
 }
 
 /**
@@ -180,7 +343,13 @@ export function openDetail(eventId, occurrenceStartUtc = null) {
   view.append(actions);
 
   closeButton.addEventListener('click', close);
-  edit.addEventListener('click', () => openEditor({ event, occurrenceStartUtc }));
+  edit.addEventListener('click', () => {
+    if (event.rrule && occurrenceStartUtc !== null) {
+      openSeriesChoice(event, occurrenceStartUtc);
+      return;
+    }
+    openEditor({ event, occurrenceStartUtc });
+  });
   remove.addEventListener('click', async () => {
     if (!window.confirm('Delete this event?')) return;
     await store.deleteEvent(event.id);
@@ -335,6 +504,32 @@ export function openEditor({ event = null, dateKey = null, occurrenceStartUtc = 
   description.rows = 3;
   description.value = event?.description ?? '';
 
+  const existingRule = event?.rrule ?? null;
+  const recurrence = el('select', 'event-input');
+  recurrence.id = 'event-recurrence';
+  /** @type {[RecurrencePreset, string][]} */
+  const recurrenceOptions = [
+    ['none', 'Does not repeat'],
+    ['daily', 'Daily'],
+    ['weekly', 'Weekly'],
+    ['weekdays', 'Every weekday'],
+    ['monthly', 'Monthly'],
+    ['yearly', 'Yearly'],
+    ['custom', 'Custom'],
+  ];
+  for (const [value, label] of recurrenceOptions) {
+    const option = el('option', null, label);
+    option.value = value;
+    recurrence.append(option);
+  }
+  recurrence.value = existingRule ? recurrencePreset(existingRule) : 'none';
+
+  const ruleText = el('textarea', 'event-input event-textarea');
+  ruleText.id = 'event-rrule';
+  ruleText.rows = 2;
+  ruleText.placeholder = 'FREQ=WEEKLY;BYDAY=MO,WE,FR';
+  ruleText.value = existingRule ?? '';
+
   const error = el('p', 'event-error', '');
   error.hidden = true;
   error.setAttribute('role', 'alert');
@@ -353,12 +548,18 @@ export function openEditor({ event = null, dateKey = null, occurrenceStartUtc = 
   const endsRow = row('Ends', endDate);
   endsRow.append(endTimeWrap);
 
+  const repeatRow = row('Repeats', recurrence);
+  const ruleRow = row('Rule', ruleText);
+  ruleRow.hidden = recurrence.value !== 'custom';
+
   const body = el('div', 'event-panel-body');
   body.append(
     row('Title', title),
     allDayLabel,
     startsRow,
     endsRow,
+    repeatRow,
+    ruleRow,
     row('Calendar', calendarSelect),
     row('Location', location),
     row('Notes', description),
@@ -371,6 +572,11 @@ export function openEditor({ event = null, dateKey = null, occurrenceStartUtc = 
   };
   syncAllDay();
   allDay.addEventListener('change', syncAllDay);
+
+  recurrence.addEventListener('change', () => {
+    ruleRow.hidden = recurrence.value !== 'custom';
+    if (recurrence.value === 'custom') ruleText.focus();
+  });
 
   view.append(
     header(event ? 'Edit event' : 'New event', { left: cancel, right: save }),
@@ -393,11 +599,42 @@ export function openEditor({ event = null, dateKey = null, occurrenceStartUtc = 
       return;
     }
 
+    /** @type {string | null} */
+    let rrule = null;
+    let rruleSupported = true;
+
+    if (recurrence.value === 'custom') {
+      rrule = ruleText.value.trim() || null;
+      if (!rrule) {
+        showError('Enter a recurrence rule.');
+        return;
+      }
+    } else if (recurrence.value !== 'none') {
+      rrule = ruleForPreset(
+        /** @type {RecurrencePreset} */ (recurrence.value),
+        dt.fromDateString(startDate.value).toPlainDate(),
+      );
+    }
+
+    if (rrule) {
+      const verdict = validateEditorRrule(rrule);
+      if (!verdict.supported) {
+        showError(verdict.reason ?? 'That recurrence rule is not supported.');
+        if (!window.confirm('Save as a single event?')) return;
+        rruleSupported = false;
+      }
+    }
+
+    const keepingRule = Boolean(rrule) && rrule === event?.rrule;
     const patch = {
       summary: title.value.trim(),
       calendar_id: calendarSelect.value,
       location: location.value.trim() || null,
       description: description.value.trim() || null,
+      rrule,
+      rrule_supported: rruleSupported,
+      exdates: keepingRule ? event?.exdates ?? null : null,
+      rdates: keepingRule ? event?.rdates ?? null : null,
     };
 
     /** @type {EventDraft} */

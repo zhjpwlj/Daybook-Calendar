@@ -517,6 +517,165 @@ try {
     'all-day end is exclusive next day',
     `${allDayEvent?.all_day_start} -> ${allDayEvent?.all_day_end}`,
   );
+
+  // --- M4 recurrence editor ---
+
+  const openEmptyDay = () =>
+    evaluate(
+      `(() => {
+        const cells = [...document.querySelectorAll('.month-cell:not(.is-other-month)')];
+        cells.find((cell) => !cell.classList.contains('is-today')).click();
+        return true;
+      })()`,
+    );
+
+  await openEmptyDay();
+  await waitFor("Boolean(document.querySelector('#event-recurrence'))");
+  await evaluate(
+    `(() => {
+      document.querySelector('#event-title').value = 'Series smoke';
+      document.querySelector('#event-start-date').value = '2026-11-02';
+      document.querySelector('#event-end-date').value = '2026-11-02';
+      const repeat = document.querySelector('#event-recurrence');
+      repeat.value = 'custom';
+      repeat.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#event-rrule').value = 'FREQ=DAILY;COUNT=5';
+      document.querySelector('.event-save').click();
+      return true;
+    })()`,
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].filter((node) => node.textContent === 'Series smoke').length === 5",
+    ),
+    'editor saves daily x5 series',
+    await evaluate(
+      "[...document.querySelectorAll('.event-chip-title')].filter((node) => node.textContent === 'Series smoke').length",
+    ),
+  );
+
+  await evaluate(
+    "[...document.querySelectorAll('.event-chip')].find((chip) => chip.textContent.includes('Series smoke')).click(); true",
+  );
+  await waitFor("Boolean(document.querySelector('.event-panel [data-action=\"edit\"]'))");
+  await evaluate("document.querySelector('.event-panel [data-action=\"edit\"]').click(); true");
+  assert(
+    await waitFor("document.querySelectorAll('.event-choice-option').length === 3"),
+    'series edit offers three choices',
+  );
+
+  await evaluate("document.querySelector('.event-panel [data-action=\"edit-following\"]').click(); true");
+  assert(
+    await waitFor("!document.querySelector('.event-notice').hidden"),
+    'this-and-following shows unsupported notice',
+  );
+  assert(
+    await evaluate(
+      "[...document.querySelectorAll('.event-chip-title')].filter((node) => node.textContent === 'Series smoke').length === 5",
+    ),
+    'this-and-following changes no data',
+  );
+
+  await evaluate("document.querySelector('.event-panel [data-action=\"edit-series\"]').click(); true");
+  assert(
+    await waitFor("Boolean(document.querySelector('.event-form'))"),
+    'entire series opens the editor',
+  );
+  await evaluate(
+    "document.querySelector('#event-title').value = 'Series renamed'; document.querySelector('.event-save').click(); true",
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].filter((node) => node.textContent === 'Series renamed').length === 5",
+    ),
+    'entire series edit updates every chip',
+  );
+
+  await evaluate(
+    "[...document.querySelectorAll('.event-chip')].find((chip) => chip.textContent.includes('Series renamed')).click(); true",
+  );
+  await waitFor("Boolean(document.querySelector('.event-panel [data-action=\"edit\"]'))");
+  await evaluate("document.querySelector('.event-panel [data-action=\"edit\"]').click(); true");
+  await waitFor("document.querySelectorAll('.event-choice-option').length === 3");
+  await evaluate("document.querySelector('.event-panel [data-action=\"edit-occurrence\"]').click(); true");
+  assert(
+    await waitFor("document.querySelector('#event-title')?.value === 'Series renamed'"),
+    'this event opens the detached copy in the editor',
+  );
+  await evaluate(
+    "document.querySelector('#event-title').value = 'Detached smoke'; document.querySelector('.event-save').click(); true",
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'Detached smoke')",
+    ),
+    'detached occurrence renders',
+  );
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip-title')].filter((node) => node.textContent === 'Series renamed').length === 4",
+    ),
+    'series keeps the other four occurrences',
+  );
+  assert(
+    await evaluate(
+      `(async () => {
+        const { store } = await import('/src/core/store.js');
+        const series = store.events.find((event) => event.summary === 'Series renamed');
+        const copy = store.events.find((event) => event.summary === 'Detached smoke');
+        return series.exdates.length === 1 && copy.rrule === null;
+      })()`,
+      true,
+    ),
+    'this event writes EXDATE and a standalone copy',
+  );
+
+  await openEmptyDay();
+  await waitFor("Boolean(document.querySelector('#event-recurrence'))");
+  await evaluate(
+    `(() => {
+      window.confirm = () => false;
+      document.querySelector('#event-title').value = 'Unsupported smoke';
+      document.querySelector('#event-start-date').value = '2026-11-03';
+      document.querySelector('#event-end-date').value = '2026-11-03';
+      const repeat = document.querySelector('#event-recurrence');
+      repeat.value = 'custom';
+      repeat.dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#event-rrule').value = 'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1';
+      document.querySelector('.event-save').click();
+      return true;
+    })()`,
+  );
+  assert(
+    await waitFor("Boolean(document.querySelector('.event-panel[open] .event-form .event-error:not([hidden])'))"),
+    'unsupported rule shows an error and cancel keeps the editor',
+  );
+  assert(
+    await evaluate(
+      "![...document.querySelectorAll('.event-chip-title')].some((node) => node.textContent === 'Unsupported smoke')",
+    ),
+    'cancelled unsupported save writes nothing',
+  );
+
+  await evaluate('window.confirm = () => true; true');
+  await evaluate("document.querySelector('.event-save').click(); true");
+  assert(
+    await waitFor(
+      "[...document.querySelectorAll('.event-chip')].some((chip) => chip.classList.contains('is-unsupported') && chip.textContent.includes('Unsupported smoke'))",
+    ),
+    'confirmed unsupported rule renders one chip with a badge',
+  );
+  assert(
+    await evaluate(
+      `(async () => {
+        const { store } = await import('/src/core/store.js');
+        const event = store.events.find((entry) => entry.summary === 'Unsupported smoke');
+        return event.rrule_supported === false && event.rrule.includes('BYSETPOS');
+      })()`,
+      true,
+    ),
+    'unsupported rule is stored raw with rrule_supported false',
+  );
 } finally {
   socket.close();
   chrome.kill('SIGKILL');

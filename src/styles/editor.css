@@ -71,7 +71,8 @@ body:has(.event-panel[open]) .app-main {
 
 .event-form,
 .event-detail,
-.event-day {
+.event-day,
+.event-choice {
   display: flex;
   flex-direction: column;
   max-height: calc(88dvh - 2px);
@@ -93,6 +94,10 @@ body:has(.event-panel[open]) .app-main {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+}
+
+.event-row[hidden] {
+  display: none;
 }
 
 .event-label {
@@ -175,6 +180,28 @@ textarea.event-input {
 
 .event-detail-description {
   white-space: pre-wrap;
+}
+
+.event-choice-hint {
+  margin: 0;
+  font-weight: 600;
+}
+
+.event-panel button.event-choice-option {
+  flex: none;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.event-notice {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .event-day-list {

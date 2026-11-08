@@ -24,11 +24,12 @@ existing `MILESTONE-N.md` convention, and create the missing fixture in-repo.
 
 - **Strict allowlist.** `validateRrule` accepts `FREQ` in
   `DAILY|WEEKLY|MONTHLY|YEARLY` plus `INTERVAL`, `COUNT`, `UNTIL`, `WKST`,
-  `BYDAY` without ordinals, `BYMONTHDAY`, `BYMONTH`. Everything else — including
-  `BYSETPOS`, ordinal `BYDAY` (`2TU`), `BYWEEKNO`, `BYYEARDAY`, `EXRULE`,
-  `COUNT`+`UNTIL` together — is unsupported. Unsupported events still store the
-  raw rule with `rrule_supported: false` and render once with a badge ([C-9]).
-  `rrule.js` could expand more; the spec does not permit it.
+  `BYDAY` (plain or ordinal), `BYMONTHDAY`, `BYMONTH`. Everything else — including
+  `BYSETPOS`, `BYWEEKNO`, `BYYEARDAY`, `EXRULE`, `COUNT`+`UNTIL` together — is
+  unsupported. Unsupported events still store the raw rule with
+  `rrule_supported: false` and render once with a badge ([C-9]). Ordinal `BYDAY`
+  expands on import (V-RRULE-1 needs `BYDAY=2TU`), but `validateEditorRrule`
+  rejects it so the v1 editor never authors it.
 - **`store.getEventsInRange` returns `Occurrence[]`.** All callers
   (`month.js`, `event-panel.js`) consume occurrences. Single events come back
   as `kind: 'single'`.
@@ -36,6 +37,11 @@ existing `MILESTONE-N.md` convention, and create the missing fixture in-repo.
   converted back to UTC. That is what keeps 9am at 9am across DST.
 - **Work on `main`.** This repo's whole history ships each milestone on `main`
   and Cloudflare deploys from it. No worktree.
+- **One rrule specifier.** `rrule`'s ESM build has extensionless internal
+  imports that Node cannot resolve, so `vite.config.js` aliases `rrule` to
+  `rrule/dist/es5/rrule.js` and prebundles that path. `recurrence.js` imports
+  through the alias and reads `rruleModule.RRule ?? rruleModule.default`, which
+  covers Vite's named-export interop and Node's namespace-default interop.
 
 ## Task 1 — Recurrence engine, validator, fixture, tests
 
@@ -164,3 +170,16 @@ the badge.
 **Acceptance:** `check:types` and `build` pass; V-RRULE-2 path works (badge,
 edit offers save-as-single or cancel, no crash); "This event" leaves the series
 intact.
+
+## Results
+
+- `npm run check:types` — exit 0.
+- `npm run test:recurrence` — 14/14 pass (10 fixture cases, unsupported paths,
+  allowlist, editor gate).
+- `npm run build` — `dist/assets/index-CSwm0Hgz.css` (17.36 kB) and
+  `dist/assets/index-BLs_dXWG.js` (236.63 kB, 70.35 kB gzip); 10 precache entries.
+- `CHROME=/opt/brave.com/brave/brave npm run smoke` — all checks pass, including
+  daily x5 authored through the editor, the three-way series edit choice,
+  EXDATE + standalone copy for "This event", and the unsupported-rule
+  confirm/cancel path. Month render with 18,250 stored events stays under
+  200 ms.
