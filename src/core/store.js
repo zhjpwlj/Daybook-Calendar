@@ -1,10 +1,12 @@
 import { bus } from './bus.js';
 import { db } from './db.js';
 import { dt } from './datetime.js';
+import { expand } from './ics/recurrence.js';
 
 /** @typedef {import('./types.js').Event} Event */
 /** @typedef {import('./types.js').EventDraft} EventDraft */
 /** @typedef {import('./types.js').Calendar} Calendar */
+/** @typedef {import('./types.js').Occurrence} Occurrence */
 
 const DEFAULT_CALENDAR = {
   name: 'Personal',
@@ -64,22 +66,29 @@ export const store = {
    * @param {number} startUtc
    * @param {number} endUtc
    * @param {string[] | null} [calendarIds]
-   * @returns {Promise<Event[]>}
+   * @returns {Promise<Occurrence[]>}
    */
   async getEventsInRange(startUtc, endUtc, calendarIds) {
     const ids = new Set(calendarIds ?? this.getVisibleCalendarIds());
-    const startDate = dt.toDateString(startUtc);
-    const endDate = dt.toDateString(endUtc);
 
-    return this.events
-      .filter((event) => ids.has(event.calendar_id))
-      .filter((event) => {
-        if (event.all_day) {
-          return event.all_day_start < endDate && event.all_day_end > startDate;
-        }
-        const eventEnd = event.dtend_utc ?? event.dtstart_utc;
-        return event.dtstart_utc < endUtc && eventEnd >= startUtc;
-      });
+    /** @type {Occurrence[]} */
+    const occurrences = [];
+    for (const event of this.events) {
+      if (!ids.has(event.calendar_id)) continue;
+      occurrences.push(...expand(event, startUtc, endUtc));
+    }
+
+    occurrences.sort((a, b) => {
+      if (a.startUtc !== b.startUtc) return a.startUtc - b.startUtc;
+      if (a.event.all_day !== b.event.all_day) return a.event.all_day ? -1 : 1;
+      return a.event.id.localeCompare(b.event.id);
+    });
+
+    return occurrences.filter(
+      (occurrence) =>
+        occurrence.startUtc < endUtc &&
+        (occurrence.endUtc ?? occurrence.startUtc) >= startUtc,
+    );
   },
 
   /**

@@ -206,6 +206,11 @@ textarea.event-input {
   font-variant-numeric: tabular-nums;
 }
 
+.event-day-row.is-unsupported .event-day-title::after {
+  content: " \21bb";
+  color: var(--text-secondary);
+}
+
 .event-day-title {
   flex: 1;
   min-width: 0;

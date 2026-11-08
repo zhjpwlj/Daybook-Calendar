@@ -8,6 +8,19 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  resolve: {
+    alias: [
+      {
+        // rrule's ESM build has extensionless internal imports, so Node cannot
+        // load it. Its CJS build works in Node and in Vite. One specifier.
+        find: /^rrule$/,
+        replacement: 'rrule/dist/es5/rrule.js',
+      },
+    ],
+  },
+  optimizeDeps: {
+    include: ['rrule/dist/es5/rrule.js'],
+  },
   build: {
     target: 'es2022',
   },

@@ -4,6 +4,7 @@ import { store } from '../core/store.js';
 /** @typedef {import('@js-temporal/polyfill').Temporal.ZonedDateTime} ZonedDateTime */
 /** @typedef {import('../core/types.js').Event} Event */
 /** @typedef {import('../core/types.js').EventDraft} EventDraft */
+/** @typedef {import('../core/types.js').Occurrence} Occurrence */
 
 /** @type {Intl.DateTimeFormatOptions} */
 const DATE_LABEL = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
@@ -110,37 +111,43 @@ function whenLabel(event) {
 }
 
 /**
- * @param {Event} event
+ * @param {Occurrence} occurrence
  * @returns {HTMLButtonElement}
  */
-function eventRow(event) {
+function eventRow(occurrence) {
+  const event = occurrence.event;
   const row = button('open-event', '', 'event-day-row');
   row.dataset.eventId = event.id;
+  row.dataset.occurrenceStart = String(occurrence.startUtc);
   const time = el(
     'span',
     'event-day-time',
-    event.all_day ? 'All day' : dt.format(dt.toZoned(event.dtstart_utc), TIME_LABEL),
+    event.all_day ? 'All day' : dt.format(dt.toZoned(occurrence.startUtc), TIME_LABEL),
   );
   const calendar = store.getCalendar(event.calendar_id);
   const dot = el('span', 'event-dot');
   dot.style.setProperty('--chip-color', calendar?.color ?? 'var(--event-chip-stripe)');
   row.append(time, dot, el('span', 'event-day-title', event.summary || 'Untitled event'));
+  if (occurrence.unsupported) row.classList.add('is-unsupported');
   return row;
 }
 
 /**
- * @param {Event[]} events
- * @returns {Event[]}
+ * @param {Occurrence[]} occurrences
+ * @returns {Occurrence[]}
  */
-function sortEvents(events) {
-  return [...events].sort((a, b) => {
-    if (a.all_day !== b.all_day) return a.all_day ? -1 : 1;
-    return (a.dtstart_utc ?? 0) - (b.dtstart_utc ?? 0);
+function sortEvents(occurrences) {
+  return [...occurrences].sort((a, b) => {
+    if (a.event.all_day !== b.event.all_day) return a.event.all_day ? -1 : 1;
+    return a.startUtc - b.startUtc;
   });
 }
 
-/** @param {string} eventId */
-export function openDetail(eventId) {
+/**
+ * @param {string} eventId
+ * @param {number | null} [occurrenceStartUtc]
+ */
+export function openDetail(eventId, occurrenceStartUtc = null) {
   const event = store.getEvent(eventId);
   if (!event) return;
 
@@ -173,7 +180,7 @@ export function openDetail(eventId) {
   view.append(actions);
 
   closeButton.addEventListener('click', close);
-  edit.addEventListener('click', () => openEditor({ event }));
+  edit.addEventListener('click', () => openEditor({ event, occurrenceStartUtc }));
   remove.addEventListener('click', async () => {
     if (!window.confirm('Delete this event?')) return;
     await store.deleteEvent(event.id);
@@ -189,7 +196,6 @@ export async function openDay(dateKey) {
   const events = sortEvents(
     await store.getEventsInRange(dt.toUtc(dayStart), dt.toUtc(dt.addDays(dayStart, 1))),
   );
-
   const view = el('section', 'event-day');
   const closeButton = button('close', 'Close', 'event-plain');
   view.append(header(dt.format(dayStart, DATE_LABEL), { right: closeButton }));
@@ -198,7 +204,7 @@ export async function openDay(dateKey) {
     view.append(el('p', 'event-day-empty', 'No events this day.'));
   } else {
     const list = el('div', 'event-day-list');
-    for (const event of events) list.append(eventRow(event));
+    for (const occurrence of events) list.append(eventRow(occurrence));
     view.append(list);
   }
 
@@ -211,8 +217,10 @@ export async function openDay(dateKey) {
   add.addEventListener('click', () => openEditor({ dateKey }));
   for (const row of view.querySelectorAll('.event-day-row')) {
     row.addEventListener('click', () => {
-      const eventId = /** @type {HTMLElement} */ (row).dataset.eventId;
-      if (eventId) openDetail(eventId);
+      const element = /** @type {HTMLElement} */ (row);
+      const eventId = element.dataset.eventId;
+      const start = element.dataset.occurrenceStart;
+      if (eventId) openDetail(eventId, start ? Number(start) : null);
     });
   }
 
@@ -242,9 +250,9 @@ function defaultSlot(dateKey) {
 }
 
 /**
- * @param {{ event?: Event | null, dateKey?: string | null }} [options]
+ * @param {{ event?: Event | null, dateKey?: string | null, occurrenceStartUtc?: number | null }} [options]
  */
-export function openEditor({ event = null, dateKey = null } = {}) {
+export function openEditor({ event = null, dateKey = null, occurrenceStartUtc = null } = {}) {
   const slot = event ? null : defaultSlot(dateKey);
   const start = event && !event.all_day ? dt.toZoned(event.dtstart_utc) : null;
   const end = event?.all_day

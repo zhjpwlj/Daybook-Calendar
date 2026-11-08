@@ -6,6 +6,7 @@ import { openDay, openDetail, openEditor } from '../event-panel.js';
 
 /** @typedef {import('@js-temporal/polyfill').Temporal.ZonedDateTime} ZonedDateTime */
 /** @typedef {import('../../core/types.js').Event} Event */
+/** @typedef {import('../../core/types.js').Occurrence} Occurrence */
 /** @typedef {import('../../core/types.js').Calendar} Calendar */
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -58,26 +59,24 @@ export function createMonthView(container) {
     const gridStart = dt.addDays(monthStart, -offset);
     const gridEnd = dt.addDays(gridStart, weeks * 7);
 
-    const events = await store.getEventsInRange(dt.toUtc(gridStart), dt.toUtc(gridEnd));
+    const occurrences = await store.getEventsInRange(dt.toUtc(gridStart), dt.toUtc(gridEnd));
     if (token !== renderToken) return;
 
     const calendarById = new Map(store.getCalendars().map((calendar) => [calendar.id, calendar]));
-    /** @type {Map<string, Event[]>} */
+    /** @type {Map<string, Occurrence[]>} */
     const byDay = new Map();
 
-    for (const event of events) {
-      const key = event.all_day
-        ? event.all_day_start
-        : dt.toDateString(event.dtstart_utc);
+    for (const occurrence of occurrences) {
+      const key = occurrence.allDayStart ?? dt.toDateString(occurrence.startUtc);
       const bucket = byDay.get(key) ?? [];
-      bucket.push(event);
+      bucket.push(occurrence);
       byDay.set(key, bucket);
     }
 
     for (const dayEvents of byDay.values()) {
       dayEvents.sort((a, b) => {
-        if (a.all_day !== b.all_day) return a.all_day ? -1 : 1;
-        return (a.dtstart_utc ?? 0) - (b.dtstart_utc ?? 0);
+        if (a.event.all_day !== b.event.all_day) return a.event.all_day ? -1 : 1;
+        return a.startUtc - b.startUtc;
       });
     }
 
@@ -126,20 +125,28 @@ export function createMonthView(container) {
       const dayEvents = byDay.get(key) ?? [];
       if (dayEvents.length > 0) {
         const chips = el('div', 'month-chips');
-        for (const event of dayEvents.slice(0, MAX_CHIPS)) {
+        for (const occurrence of dayEvents.slice(0, MAX_CHIPS)) {
+          const event = occurrence.event;
           const chip = el('button', 'event-chip');
           chip.type = 'button';
           chip.dataset.eventId = event.id;
           const calendar = calendarById.get(event.calendar_id);
           chip.style.setProperty('--chip-color', calendar?.color ?? 'var(--event-chip-stripe)');
           chip.title = event.summary || 'Untitled event';
+          if (occurrence.unsupported) {
+            chip.classList.add('is-unsupported');
+            chip.setAttribute(
+              'aria-label',
+              `${chip.title}, recurrence not fully supported`,
+            );
+          }
 
           if (!event.all_day) {
             chip.append(
               el(
                 'span',
                 'event-chip-time',
-                dt.format(dt.toZoned(event.dtstart_utc), {
+                dt.format(dt.toZoned(occurrence.startUtc), {
                   hour: 'numeric',
                   minute: '2-digit',
                 }),
@@ -149,7 +156,7 @@ export function createMonthView(container) {
           chip.append(el('span', 'event-chip-title', event.summary || 'Untitled'));
           chip.addEventListener('click', (clickEvent) => {
             clickEvent.stopPropagation();
-            openDetail(event.id);
+            openDetail(event.id, occurrence.startUtc);
           });
           chips.append(chip);
         }
@@ -195,7 +202,7 @@ export function createMonthView(container) {
     requestAnimationFrame(() => {
       debugLog('month:render', {
         ms: Number((performance.now() - started).toFixed(1)),
-        events: events.length,
+        events: occurrences.length,
         weeks,
       });
     });

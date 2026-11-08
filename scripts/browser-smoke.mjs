@@ -264,11 +264,11 @@ try {
       const allDayInRange = (await store.getEventsInRange(
         Date.UTC(2026, 9, 26),
         Date.UTC(2026, 9, 27),
-      )).some((entry) => entry.id === allDay.id);
+      )).some((entry) => entry.event.id === allDay.id);
       const allDayAfterRange = (await store.getEventsInRange(
         Date.UTC(2026, 9, 28),
         Date.UTC(2026, 9, 29),
-      )).some((entry) => entry.id === allDay.id);
+      )).some((entry) => entry.event.id === allDay.id);
 
       const hiddenCalendar = await store.createCalendar({ name: 'Hidden', visible: false });
       const hiddenEvent = await store.createEvent({
@@ -280,12 +280,12 @@ try {
       const hiddenExcluded = !(await store.getEventsInRange(
         Date.UTC(2026, 9, 25),
         Date.UTC(2026, 9, 27),
-      )).some((entry) => entry.id === hiddenEvent.id);
+      )).some((entry) => entry.event.id === hiddenEvent.id);
       const hiddenExplicit = (await store.getEventsInRange(
         Date.UTC(2026, 9, 25),
         Date.UTC(2026, 9, 27),
         [home.id, hiddenCalendar.id],
-      )).some((entry) => entry.id === hiddenEvent.id);
+      )).some((entry) => entry.event.id === hiddenEvent.id);
 
       await store.deleteEvent(allDay.id);
       await store.deleteEvent(hiddenEvent.id);
@@ -451,8 +451,11 @@ try {
   );
 
   await evaluate('window.confirm = () => true; true');
-  await evaluate(
-    "[...document.querySelectorAll('.event-chip')].find((chip) => chip.textContent.includes('Smoke edited')).click(); true",
+  assert(
+    await waitFor(
+      "(() => { const chip = [...document.querySelectorAll('.event-chip')].find((node) => node.textContent.includes('Smoke edited')); if (!chip) return false; chip.click(); return true; })()",
+    ),
+    'delete: editor opens for edited event',
   );
   await evaluate("document.querySelector('.event-panel [data-action=\"delete\"]').click(); true");
   assert(

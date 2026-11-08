@@ -164,6 +164,12 @@
   text-overflow: ellipsis;
 }
 
+.event-chip.is-unsupported::after {
+  content: "\21bb";
+  flex: none;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 600px) {
   .event-chip-time {
     display: none;

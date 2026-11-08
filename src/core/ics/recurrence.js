@@ -1,11 +1,12 @@
 import { Temporal } from '@js-temporal/polyfill';
-import rrule from 'rrule';
+import * as rruleModule from 'rrule/dist/es5/rrule.js';
 import { dt, getSystemTimezone } from '../datetime.js';
 import { validateRrule } from './validate.js';
 
 // rrule ships an ESM build whose internal imports lack extensions, so Node
-// cannot load it. The CJS entry works in both Node and Vite.
-const { RRule } = rrule;
+// cannot load it. The CJS build works in both runtimes, but each exposes it
+// differently: Node via the namespace default, Vite via named exports.
+const { RRule } = rruleModule.RRule ? rruleModule : rruleModule.default;
 
 /** @typedef {import('../../core/types.js').Event} Event */
 /** @typedef {import('../../core/types.js').Occurrence} Occurrence */
@@ -140,6 +141,19 @@ function unsupportedOccurrence(event) {
 }
 
 /**
+ * @param {Occurrence} occurrence
+ * @param {number} rangeStartUtc
+ * @param {number} rangeEndUtc
+ * @returns {boolean}
+ */
+function overlaps(occurrence, rangeStartUtc, rangeEndUtc) {
+  return (
+    occurrence.startUtc < rangeEndUtc &&
+    (occurrence.endUtc ?? occurrence.startUtc) >= rangeStartUtc
+  );
+}
+
+/**
  * Expand one event into occurrences overlapping [rangeStartUtc, rangeEndUtc).
  * @param {Event} event
  * @param {number} rangeStartUtc
@@ -147,16 +161,22 @@ function unsupportedOccurrence(event) {
  * @returns {Occurrence[]}
  */
 export function expand(event, rangeStartUtc, rangeEndUtc) {
-  if (!event.rrule) return [singleOccurrence(event)];
-  if (!event.rrule_supported) return [unsupportedOccurrence(event)];
+  if (!event.rrule || !event.rrule_supported) {
+    const occurrence = event.rrule ? unsupportedOccurrence(event) : singleOccurrence(event);
+    return overlaps(occurrence, rangeStartUtc, rangeEndUtc) ? [occurrence] : [];
+  }
 
   const verdict = validateRrule(event.rrule);
-  if (!verdict.supported) return [unsupportedOccurrence(event)];
+  if (!verdict.supported) {
+    const occurrence = unsupportedOccurrence(event);
+    return overlaps(occurrence, rangeStartUtc, rangeEndUtc) ? [occurrence] : [];
+  }
 
   try {
     return expandRule(event, rangeStartUtc, rangeEndUtc);
   } catch {
-    return [unsupportedOccurrence(event)];
+    const occurrence = unsupportedOccurrence(event);
+    return overlaps(occurrence, rangeStartUtc, rangeEndUtc) ? [occurrence] : [];
   }
 }
 
