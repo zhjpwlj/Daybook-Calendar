@@ -1,6 +1,7 @@
 # M4 — Recurrence engine (implementation plan)
 
-Source spec: `/tmp/opencode/preserve/MILESTONE-1~14.md` §M4. `spec.md` and
+Source spec: `MILESTONE-1~14.md` §M4. `read-after-M14.md` carries M15–M19.
+`spec.md` and
 `scaffolding/` are absent from this repo (R14): work at the repo root, use the
 existing `MILESTONE-N.md` convention, and create the missing fixture in-repo.
 
